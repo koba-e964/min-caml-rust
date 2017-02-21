@@ -1,0 +1,177 @@
+use nom::{alpha, digit};
+use syntax::*;
+
+named!(simple_exp<Syntax>, alt!(
+    ws!(do_parse!(tag!("(") >> res: exp >> tag!(")") >> (res))) |
+    ws!(do_parse!(tag!("(") >> tag!(")") >> (Syntax::Unit))) |
+    ws!(do_parse!(b: bool_lit >> (Syntax::Bool(b)))) |
+    ws!(do_parse!(i: int_lit >> (Syntax::Int(i)))) |
+    ws!(do_parse!(id: ident >> (Syntax::Var(id))))
+    /*
+    ws!(do_parse!(s: simple_exp >>
+                  tag!(".") >>
+                  tag!("(") >>
+                  e: exp >>
+                  tag!(")") >>
+                  (Syntax::Get(Box::new(s), Box::new(e)))))
+     */
+)); // TODO 5/7 done
+
+named!(pub exp<Syntax>, alt!(
+    ws!(simple_exp)
+)); // TODO 1/23 done
+
+named!(bool_lit<bool>, alt!(
+    ws!(do_parse!(tag!("true") >> (true))) |
+    ws!(do_parse!(tag!("false") >> (false)))
+));
+
+named!(int_lit<i64>, ws!(do_parse!(
+    x: digit >>
+        (convert(x, 10))
+)));
+named!(ident<String>, ws!(do_parse!(
+    s: alpha >>
+        (String::from_utf8(s.to_vec()).unwrap())
+)));
+
+
+fn convert(x: &[u8], radix: i64) -> i64 {
+    let mut cur = 0;
+    for &v in x.iter() {
+        cur *= radix;
+        cur += v as i64 - b'0' as i64;
+    }
+    cur
+}
+
+/*
+simple_exp: /* (* 括弧をつけなくても関数の引数になれる式 (caml2html: parser_simple) *) */
+| LPAREN exp RPAREN
+    { $2 }
+| LPAREN RPAREN
+    { Unit }
+| BOOL
+    { Bool($1) }
+| INT
+    { Int($1) }
+| FLOAT
+    { Float($1) }
+| IDENT
+    { Var($1) }
+| simple_exp DOT LPAREN exp RPAREN
+    { Get($1, $4) }
+
+exp: /* (* 一般の式 (caml2html: parser_exp) *) */
+| simple_exp
+    { $1 }
+| NOT exp
+    %prec prec_app
+    { Not($2) }
+| MINUS exp
+    %prec prec_unary_minus
+    { match $2 with
+    | Float(f) -> Float(-.f) (* -1.23などは型エラーではないので別扱い *)
+    | e -> Neg(e) }
+| exp PLUS exp /* (* 足し算を構文解析するルール (caml2html: parser_add) *) */
+    { Add($1, $3) }
+| exp MINUS exp
+    { Sub($1, $3) }
+| exp EQUAL exp
+    { Eq($1, $3) }
+| exp LESS_GREATER exp
+    { Not(Eq($1, $3)) }
+| exp LESS exp
+    { Not(LE($3, $1)) }
+| exp GREATER exp
+    { Not(LE($1, $3)) }
+| exp LESS_EQUAL exp
+    { LE($1, $3) }
+| exp GREATER_EQUAL exp
+    { LE($3, $1) }
+| IF exp THEN exp ELSE exp
+    %prec prec_if
+    { If($2, $4, $6) }
+| MINUS_DOT exp
+    %prec prec_unary_minus
+    { FNeg($2) }
+| exp PLUS_DOT exp
+    { FAdd($1, $3) }
+| exp MINUS_DOT exp
+    { FSub($1, $3) }
+| exp AST_DOT exp
+    { FMul($1, $3) }
+| exp SLASH_DOT exp
+    { FDiv($1, $3) }
+| LET IDENT EQUAL exp IN exp
+    %prec prec_let
+    { Let(addtyp $2, $4, $6) }
+| LET REC fundef IN exp
+    %prec prec_let
+    { LetRec($3, $5) }
+| exp actual_args
+    %prec prec_app
+    { App($1, $2) }
+| elems
+    { Tuple($1) }
+| LET LPAREN pat RPAREN EQUAL exp IN exp
+    { LetTuple($3, $6, $8) }
+| simple_exp DOT LPAREN exp RPAREN LESS_MINUS exp
+    { Put($1, $4, $7) }
+| exp SEMICOLON exp
+    { Let((Id.gentmp Type.Unit, Type.Unit), $1, $3) }
+| ARRAY_CREATE simple_exp simple_exp
+    %prec prec_app
+    { Array($2, $3) }
+| error
+    { failwith
+	(Printf.sprintf "parse error near characters %d-%d"
+	   (Parsing.symbol_start ())
+	   (Parsing.symbol_end ())) }
+
+fundef:
+| IDENT formal_args EQUAL exp
+    { { name = addtyp $1; args = $2; body = $4 } }
+
+formal_args:
+| IDENT formal_args
+    { addtyp $1 :: $2 }
+| IDENT
+    { [addtyp $1] }
+
+actual_args:
+| actual_args simple_exp
+    %prec prec_app
+    { $1 @ [$2] }
+| simple_exp
+    %prec prec_app
+    { [$1] }
+
+elems:
+| elems COMMA exp
+    { $1 @ [$3] }
+| exp COMMA exp
+    { [$1; $3] }
+
+pat:
+| pat COMMA IDENT
+    { $1 @ [addtyp $3] }
+| IDENT COMMA IDENT
+    { [addtyp $1; addtyp $3] }
+*/
+
+
+#[test]
+fn test_simple_exp() {
+    use nom::IResult;
+    use self::Syntax::*;
+    assert_eq!(exp(b" ( c)"), IResult::Done(&[0u8; 0][..],
+                                            Var("c".to_string())));
+    assert_eq!(exp(b"() "), IResult::Done(&[0u8; 0][..], Unit));
+    assert_eq!(exp(b"100"), IResult::Done(&[0u8; 0][..], Int(100)));
+    assert_eq!(exp(b"10.0"), IResult::Done(&[0u8; 0][..], Float(10.0.into())));
+    assert_eq!(exp(b"a.(b)"),
+               IResult::Done(&[0u8; 0][..],
+                             Get(Box::new(Var("a".to_string())),
+                                 Box::new(Var("b".to_string())))));
+}

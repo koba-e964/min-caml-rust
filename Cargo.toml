@@ -4,3 +4,5 @@ version = "0.1.0"
 authors = ["koba-e964 <koba_max@kobas-Air.pohe>"]
 
 [dependencies]
+nom = "^2.1"
+ordered-float = "0.4"

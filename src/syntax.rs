@@ -1,10 +1,12 @@
-#[derive(Clone, Debug)]
+use ordered_float::OrderedFloat;
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 // syntax.ml
 pub enum Syntax {
     Unit,
     Bool(bool),
     Int(i64),
-    Float(f64),
+    Float(OrderedFloat<f64>),
     Not(Box<Syntax>),
     Neg(Box<Syntax>),
     IntBin(IntBin, Box<Syntax>, Box<Syntax>),
@@ -23,28 +25,28 @@ pub enum Syntax {
     Put(Box<Syntax>, Box<Syntax>, Box<Syntax>),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Fundef {
     name: (String, Type),
     args: Box<[(String, Type)]>,
     body: Box<Syntax>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum IntBin {
     Add, Sub,
 }
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum FloatBin {
     FAdd, FSub, FMul, FDiv,
 }
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CompBin {
     Eq, LE,
 }
 
 // type.ml
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Type {
     Unit,
     Bool,
