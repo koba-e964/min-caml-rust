@@ -1,0 +1,6 @@
+[package]
+name = "min-caml-rust"
+version = "0.1.0"
+authors = ["koba-e964 <koba_max@kobas-Air.pohe>"]
+
+[dependencies]
