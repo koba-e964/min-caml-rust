@@ -55,5 +55,5 @@ pub enum Type {
     Fun(Box<[Type]>, Box<Type>),
     Tuple(Box<[Type]>),
     Array(Box<Type>),
-    Var(Option<Box<Type>>),
+    Var(usize),
 }

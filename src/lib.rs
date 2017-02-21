@@ -4,3 +4,4 @@ extern crate ordered_float;
 
 pub mod syntax;
 pub mod parser;
+pub mod typing;
