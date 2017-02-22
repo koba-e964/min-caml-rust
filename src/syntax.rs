@@ -32,15 +32,15 @@ pub struct Fundef {
     body: Box<Syntax>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum IntBin {
     Add, Sub,
 }
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FloatBin {
     FAdd, FSub, FMul, FDiv,
 }
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CompBin {
     Eq, LE,
 }

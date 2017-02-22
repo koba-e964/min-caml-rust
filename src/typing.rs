@@ -1,6 +1,15 @@
 use syntax::*;
 use std::collections::HashMap;
 
+/**
+ * typing.rs (typing.ml in original min-caml)
+ * Handles typing of Syntax.
+ * Change of design: the signature of deref_typ changed (additional tyenv).
+ * This is because of our type inference algorithm.
+ * Instead of storing decided types in the refcell of Type.Var itself,
+ * we store them in tyenv (:HashMap<usize, Type>).
+ */
+
 /* Type that represents an exception */
 #[derive(Debug)]
 enum TypingError {
@@ -8,19 +17,99 @@ enum TypingError {
     Unify(Type, Type),
 }
 
-fn deref_typ(e: &Type) -> Type {
-    panic!();
+fn deref_typ(e: &Type, tyenv: &HashMap<usize, Type>) -> Type {
+    macro_rules! deref_typ_list {
+        ($ls:expr) => ($ls.iter().map(|x| deref_typ(x, tyenv))
+                       .collect::<Vec<_>>()
+                       .into_boxed_slice());
+    }
+    match *e {
+        Type::Fun(ref t1s, ref t2) =>
+            Type::Fun(deref_typ_list!(t1s), Box::new(deref_typ(t2, tyenv))),
+        Type::Tuple(ref ts) => Type::Tuple(deref_typ_list!(ts)),
+        Type::Array(ref t) => Type::Array(Box::new(deref_typ(t, tyenv))),
+        Type::Var(ref n) => {
+            if let Some(t) = tyenv.get(n) {
+                t.clone()
+            } else {
+                println!("uninstantiated type variable {} detected; assuming int@.", n);
+                Type::Int
+            }
+        }
+        _ => e.clone(),
+    }
 }
 
-fn deref_term(e: &Syntax) -> Syntax {
-    panic!();
-}
+fn deref_term(e: &Syntax, tyenv: &HashMap<usize, Type>) -> Syntax {
+    macro_rules! invoke {
+        ($e:expr) => (deref_term(e, tyenv));
+    }
+    /*
+     * Recursively apply deref_term to inside constructors of form C(e1, e2, ...).
+     * ($constr, $($e)*)
+     */
+    macro_rules! pack {
+        ($constr:expr, $($e:expr),*) => ($constr($(
+            Box::new(invoke!($e))
+        ),*));
+    }
+    /*
+     * Recursively apply deref_term to inside constructors of form C(op, e1, e2).
+     * ($constr, $($e)*)
+     */
+    macro_rules! pack_bin {
+        ($constr:expr, $op:expr, $e1:expr, $e2:expr) =>
+            ({ $constr(*$op, Box::new(invoke!($e1)), Box::new(invoke!($e2))) })
+    }
+    macro_rules! boxed_array {
+        ($ls:expr) => ($ls.iter().map(|x| invoke!(x)).collect::<Vec<_>>()
+                       .into_boxed_slice());
+    }
+    match *e {
+        Syntax::Not(ref e) => pack!(Syntax::Not, e),
+        Syntax::Neg(ref e) => pack!(Syntax::Neg, e),
+        Syntax::IntBin(ref op, ref e1, ref e2) =>
+            pack_bin!(Syntax::IntBin, op, e1, e2),
+        Syntax::FNeg(ref e) => pack!(Syntax::FNeg, e),
+        Syntax::FloatBin(ref op, ref e1, ref e2) =>
+            pack_bin!(Syntax::FloatBin, op, e1, e2),
+        Syntax::CompBin(ref op, ref e1, ref e2) =>
+            pack_bin!(Syntax::CompBin, op, e1, e2),
+        Syntax::If(ref e1, ref e2, ref e3) => pack!(Syntax::If, e1, e2, e3),
+        Syntax::Let((ref x, ref t), ref e1, ref e2) =>
+            Syntax::Let((x.clone(), deref_typ(t, tyenv)), Box::new(invoke!(e1)),
+                        Box::new(invoke!(e2))),
+        Syntax::LetRec(ref fundef, ref e2) => {
+            panic!()
+        },
+        Syntax::App(ref e, ref es) =>
+            Syntax::App(Box::new(invoke!(e)), boxed_array!(es)),
+        Syntax::Tuple(ref es) => Syntax::Tuple(boxed_array!(es)),
+        Syntax::LetTuple(ref xts, ref e1, ref e2) => {
+            let xts: Box<_> = xts.iter().map(|&(ref x, ref t)| (x.clone(), deref_typ(t, tyenv))).collect::<Vec<_>>().into_boxed_slice();
+            Syntax::LetTuple(xts, Box::new(invoke!(e1)), Box::new(invoke!(e2)))
+        },
+        Syntax::Array(ref e1, ref e2) => pack!(Syntax::Array, e1, e2),
+        Syntax::Get(ref e1, ref e2) => pack!(Syntax::Get, e1, e2),
+        Syntax::Put(ref e1, ref e2, ref e3) => pack!(Syntax::Put, e1, e2, e3),
+        _ => e.clone(),
+    }
+} // TODO 1 case left
 
 /*
- * Checks if type variable n occurs in ty.
+ * Checks if type variable r1 occurs in ty.
  */
-fn occur(n: usize, ty: &Type) -> bool {
-    false // TODO
+fn occur(r1: usize, ty: &Type) -> bool {
+    macro_rules! occur_list {
+        ($ls:expr) => ($ls.iter().any(|ty| occur(r1, ty)))
+    }
+    match *ty {
+        Type::Fun(ref t2s, ref t2) => occur_list!(t2s) || occur(r1, t2),
+        Type::Tuple(ref t2s) => occur_list!(t2s),
+        Type::Array(ref t2) => occur(r1, t2),
+        Type::Var(r2) => r1 == r2,
+        _ => false,
+    }
 }
 
 fn unify(t1: &Type, t2: &Type,
@@ -146,6 +235,7 @@ fn g(env: &HashMap<String, Type>, e: &Syntax,
 
 pub fn f(e: &Syntax) -> Result<Syntax, String> {
     let mut extenv = HashMap::new();
+    let mut tyenv = HashMap::new();
     let typed = g(&HashMap::new(), e, &mut extenv).unwrap();
     println!("{:?}", typed);
     match unify(&Type::Unit, &typed, &mut extenv) {
@@ -154,8 +244,8 @@ pub fn f(e: &Syntax) -> Result<Syntax, String> {
         Err(e) => return Err(format!("{:?}", e)),
         Ok(()) => {},
     }
-    extenv = extenv.into_iter().map(|(k, x)| (k, deref_typ(&x))).collect();
-    Ok(deref_term(e))
+    extenv = extenv.into_iter().map(|(k, x)| (k, deref_typ(&x, &tyenv))).collect();
+    Ok(deref_term(e, &tyenv))
 }
 
 #[cfg(test)]
@@ -175,5 +265,17 @@ mod tests{
         let syn = App(Box::new(Var("print_int".to_string())),
                       vec![Int(23)].into_boxed_slice());
         assert!(f(&syn).is_ok()); // top can be :unit.
+    }
+    #[test]
+    fn test_deref_typ() {
+        let ty = Type::Array(Box::new(Type::Var(2)));
+        let tyenv = vec![(2, Type::Int)].into_iter().collect();
+        assert_eq!(deref_typ(&ty, &tyenv), Type::Array(Box::new(Type::Int)));
+    }
+    #[test]
+    fn test_deref_typ_unresolved() {
+        let ty = Type::Array(Box::new(Type::Var(2)));
+        let tyenv = vec![(0, Type::Float)].into_iter().collect();
+        assert_eq!(deref_typ(&ty, &tyenv), Type::Array(Box::new(Type::Int)));
     }
 }
