@@ -113,8 +113,12 @@ fn occur(r1: usize, ty: &Type) -> bool {
 }
 
 fn unify(t1: &Type, t2: &Type,
-         extenv: &mut HashMap<String, Type>) -> Result<(), TypingError> {
+         extenv: &mut HashMap<String, Type>,
+         tyenv: &mut HashMap<usize, Type>) -> Result<(), TypingError> {
     println!("unify {:?} {:?}", t1, t2);
+    macro_rules! invoke {
+        ($t1:expr, $t2:expr) => (unify(t1, t2, extenv, tyenv));
+    }
     macro_rules! unify_seq {
         ($t1s:expr, $t2s: expr) => {
             let n = $t1s.len();
@@ -123,7 +127,7 @@ fn unify(t1: &Type, t2: &Type,
                 return Err(TypingError::Unify(t1.clone(), t2.clone()));
             }
             for i in 0 .. n {
-                try!(unify(&$t1s[i], &$t2s[i], extenv));
+                try!(invoke!(&$t1s[i], &$t2s[i]));
             }
         }
     }
@@ -134,31 +138,39 @@ fn unify(t1: &Type, t2: &Type,
         (Type::Float, Type::Float) => Ok(()),
         (Type::Fun(ref t1s, ref t1cod), Type::Fun(ref t2s, ref t2cod)) => {
             unify_seq!(t1s, t2s);
-            unify(t1cod, t2cod, extenv)
+            invoke!(t1cod, t2cod)
         },
         (Type::Tuple(ref t1s), Type::Tuple(ref t2s)) => {
             unify_seq!(t1s, t2s);
             Ok(())
         },
-        (Type::Array(ref t1), Type::Array(ref t2)) => unify(t1, t2, extenv),
-        (Type::Var(n1), Type::Var(n2)) if n1 == n2 => Ok(()),
-        (Type::Var(n1), _) => {
-            if occur(n1, t2) {
-                return Err(TypingError::Unify(t1.clone(), t2.clone()));
+        (Type::Array(ref t1), Type::Array(ref t2)) => invoke!(t1, t2),
+        (Type::Var(ref n1), Type::Var(ref n2)) if n1 == n2 => Ok(()),
+        (Type::Var(ref n1), _) => {
+            if let Some(t1sub) = tyenv.get(n1).cloned() {
+                invoke!(t1sub, t2)
+            } else {
+                if occur(*n1, t2) {
+                    return Err(TypingError::Unify(t1.clone(), t2.clone()));
+                }
+                tyenv.insert(*n1, t2.clone());
+                Ok(())
             }
-            // TODO add constraint
-            Ok(())
         },
-        (_, Type::Var(n2)) => unify(t2, t1, extenv),
+        (_, Type::Var(ref n2)) => invoke!(t2, t1),
         _ => Err(TypingError::Unify(t1.clone(), t2.clone())),
     }
 }
 
 
 fn g(env: &HashMap<String, Type>, e: &Syntax,
-     extenv: &mut HashMap<String, Type>) -> Result<Type, TypingError> {
+     extenv: &mut HashMap<String, Type>,
+     tyenv: &mut HashMap<usize, Type>) -> Result<Type, TypingError> {
+    macro_rules! invoke {
+        ($env:expr, $e:expr) => (g($env, $e, extenv, tyenv));
+    }
     macro_rules! typed {
-        ($e:expr, $ty:expr) => (try!(unify(&$ty, &try!(g(env, $e, extenv)), extenv)));
+        ($e:expr, $ty:expr) => (try!(unify(&$ty, &try!(invoke!(env, $e)), extenv, tyenv)));
     }
     match *e {
         Syntax::Unit => Ok(Type::Unit),
@@ -188,19 +200,20 @@ fn g(env: &HashMap<String, Type>, e: &Syntax,
             Ok(Type::Float)
         },
         Syntax::CompBin(_, ref e1, ref e2) => {
-            try!(unify(&try!(g(env, e1, extenv)), &try!(g(env, e2, extenv)), extenv));
+            try!(unify(&try!(invoke!(env, e1)), &try!(invoke!(env, e2)),
+                       extenv, tyenv));
             Ok(Type::Bool)
         },
         Syntax::If(ref e1, ref e2, ref e3) => {
             typed!(e1, Type::Bool);
-            let t2 = try!(g(env, e2, extenv));
-            let t3 = try!(g(env, e3, extenv));
-            try!(unify(&t2, &t3, extenv));
+            let t2 = try!(invoke!(env, e2));
+            let t3 = try!(invoke!(env, e3));
+            try!(unify(&t2, &t3, extenv, tyenv));
             Ok(t2)
         },
         Syntax::Let((ref x, ref t), ref e1, ref e2) => {
             typed!(e1, t);
-            g(panic!(), e2, extenv)
+            invoke!(panic!(), e2)
         },
         Syntax::Var(ref x) => {
             panic!()
@@ -224,7 +237,7 @@ fn g(env: &HashMap<String, Type>, e: &Syntax,
             panic!()
         }
         Syntax::Put(ref e1, ref e2, ref e3) => {
-            let t = try!(g(env, e3, extenv));
+            let t = try!(invoke!(env, e3));
             typed!(e1, Type::Array(Box::new(t.clone())));
             typed!(e2, Type::Int);
             Ok(t)
@@ -236,9 +249,9 @@ fn g(env: &HashMap<String, Type>, e: &Syntax,
 pub fn f(e: &Syntax) -> Result<Syntax, String> {
     let mut extenv = HashMap::new();
     let mut tyenv = HashMap::new();
-    let typed = g(&HashMap::new(), e, &mut extenv).unwrap();
+    let typed = g(&HashMap::new(), e, &mut extenv, &mut tyenv).unwrap();
     println!("{:?}", typed);
-    match unify(&Type::Unit, &typed, &mut extenv) {
+    match unify(&Type::Unit, &typed, &mut extenv, &mut tyenv) {
         Err(TypingError::Unify(_, _)) =>
             return Err("top level does not have type unit".to_string()),
         Err(e) => return Err(format!("{:?}", e)),
