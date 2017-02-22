@@ -1,4 +1,4 @@
-use syntax::*;
+use syntax::{Syntax, Fundef, Type};
 use id::IdGen;
 use std::collections::HashMap;
 
@@ -14,7 +14,6 @@ use std::collections::HashMap;
 /* Type that represents an exception */
 #[derive(Debug)]
 enum TypingError {
-    NotFound,
     Unify(Type, Type),
 }
 
@@ -313,57 +312,61 @@ fn g(env: &HashMap<String, Type>, e: &Syntax,
 
 /*
  * Type-check a given AST e.
- * TODO: extenv, id_gen should be passed from outside.
+ * Returns the resulting AST and extenv (environment of external functions).
  */
-pub fn f(e: &Syntax) -> Result<Syntax, String> {
+pub fn f(e: &Syntax, id_gen: &mut IdGen)
+         -> Result<(Syntax, HashMap<String, Type>), String> {
     let mut extenv = HashMap::new();
     let mut tyenv = HashMap::new();
-    let mut id_gen = IdGen::new();
-    let typed = g(&HashMap::new(), e, &mut extenv, &mut tyenv, &mut id_gen)
+    let typed = g(&HashMap::new(), e, &mut extenv, &mut tyenv, id_gen)
         .unwrap();
     println!("{:?}", typed);
     match unify(&Type::Unit, &typed, &mut extenv, &mut tyenv) {
         Err(TypingError::Unify(_, _)) =>
             return Err("top level does not have type unit".to_string()),
-        Err(e) => return Err(format!("{:?}", e)),
         Ok(()) => {},
     }
     extenv = extenv.into_iter().map(|(k, x)| (k, deref_typ(&x, &tyenv))).collect();
-    Ok(deref_term(e, &tyenv))
+    Ok((deref_term(e, &tyenv), extenv))
 }
 
 #[cfg(test)]
 mod tests{
     use typing::*;
+    use syntax::*;
     #[test]
     fn test_typing_add() {
         use self::Syntax::*;
+        let mut id_gen = IdGen::new();
         let syn = IntBin(self::IntBin::Add,
                          Box::new(Int(14)),
                          Box::new(Int(23)));
-        assert!(f(&syn).is_err()); // top is not :unit.
+        assert!(f(&syn, &mut id_gen).is_err()); // top is not :unit.
     }
     #[test]
     fn test_typing_ext_print() {
         use self::Syntax::*;
+        let mut id_gen = IdGen::new();
         let syn = App(Box::new(Var("print_int".to_string())),
                       vec![Int(23)].into_boxed_slice());
-        assert!(f(&syn).is_ok()); // top can be :unit.
+        assert!(f(&syn, &mut id_gen).is_ok()); // top can be :unit.
     }
     #[test]
     fn test_typing_letrec() {
         use self::Syntax::*;
+        let mut id_gen = IdGen::new();
         // let rec f x = f x in f 0
         let fundef = LetRec(Fundef {
             name: ("f".to_string(), Type::Var(100)),
             args: vec![("x".to_string(), Type::Var(101))].into_boxed_slice(),
             body: Box::new(App(Box::new(Var("f".to_string())), vec![Var("x".to_string())].into_boxed_slice()))
         }, Box::new(App(Box::new(Var("f".to_string())), vec![Int(0)].into_boxed_slice())));
-        assert!(f(&fundef).is_ok());
+        assert!(f(&fundef, &mut id_gen).is_ok());
     }
     #[test]
     fn test_typing_tuple() {
         use self::Syntax::*;
+        let mut id_gen = IdGen::new();
         let tuple = Tuple(vec![Int(4), Int(5)]
                           .into_boxed_slice()); // (4, 5)
         // let (x: int, y: 'a100) = (...) in x
@@ -375,16 +378,17 @@ mod tests{
                               Box::new(Var("x".to_string())));
         let printer = App(Box::new(Var("print_int".to_string())),
                       vec![let_ex].into_boxed_slice()); // print_int (...)
-        assert!(f(&printer).is_ok());
+        assert!(f(&printer, &mut id_gen).is_ok());
     }
     #[test]
     fn test_typing_array() {
         use self::Syntax::*;
+        let mut id_gen = IdGen::new();
         let ary = Array(Box::new(Int(4)), Box::new(Int(5))); // newarray 4 5
         let access = Get(Box::new(ary), Box::new(Int(2))); // (...).(2)
         let printer = App(Box::new(Var("print_int".to_string())),
                       vec![access].into_boxed_slice());
-        assert!(f(&printer).is_ok());
+        assert!(f(&printer, &mut id_gen).is_ok());
     }
     #[test]
     fn test_deref_typ() {
