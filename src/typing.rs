@@ -81,7 +81,17 @@ fn deref_term(e: &Syntax, tyenv: &HashMap<usize, Type>) -> Syntax {
             Syntax::Let((x.clone(), deref_typ(t, tyenv)), Box::new(invoke!(e1)),
                         Box::new(invoke!(e2))),
         Syntax::LetRec(ref fundef, ref e2) => {
-            panic!()
+            let (ref x, ref t) = fundef.name;
+            let yts = &fundef.args;
+            let e1 = &fundef.body;
+            Syntax::LetRec(Fundef {
+                name: (x.to_string(), deref_typ(t, tyenv)),
+                args: yts.iter()
+                    .map(|&(ref x, ref t)| (x.clone(), deref_typ(t, tyenv)))
+                    .collect::<Vec<_>>()
+                    .into_boxed_slice(),
+                body: Box::new(invoke!(e1))
+            }, Box::new(invoke!(e2)))
         },
         Syntax::App(ref e, ref es) =>
             Syntax::App(Box::new(invoke!(e)), boxed_array!(es)),
@@ -95,7 +105,7 @@ fn deref_term(e: &Syntax, tyenv: &HashMap<usize, Type>) -> Syntax {
         Syntax::Put(ref e1, ref e2, ref e3) => pack!(Syntax::Put, e1, e2, e3),
         _ => e.clone(),
     }
-} // TODO 1 case left (LetRec)
+}
 
 /*
  * Checks if type variable r1 occurs in ty.
@@ -339,6 +349,17 @@ mod tests{
         let syn = App(Box::new(Var("print_int".to_string())),
                       vec![Int(23)].into_boxed_slice());
         assert!(f(&syn).is_ok()); // top can be :unit.
+    }
+    #[test]
+    fn test_typing_letrec() {
+        use self::Syntax::*;
+        // let rec f x = f x in f 0
+        let fundef = LetRec(Fundef {
+            name: ("f".to_string(), Type::Var(100)),
+            args: vec![("x".to_string(), Type::Var(101))].into_boxed_slice(),
+            body: Box::new(App(Box::new(Var("f".to_string())), vec![Var("x".to_string())].into_boxed_slice()))
+        }, Box::new(App(Box::new(Var("f".to_string())), vec![Int(0)].into_boxed_slice())));
+        assert!(f(&fundef).is_ok());
     }
     #[test]
     fn test_typing_tuple() {
