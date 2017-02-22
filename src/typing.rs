@@ -1,4 +1,5 @@
 use syntax::*;
+use id::IdGen;
 use std::collections::HashMap;
 
 /**
@@ -42,7 +43,7 @@ fn deref_typ(e: &Type, tyenv: &HashMap<usize, Type>) -> Type {
 
 fn deref_term(e: &Syntax, tyenv: &HashMap<usize, Type>) -> Syntax {
     macro_rules! invoke {
-        ($e:expr) => (deref_term(e, tyenv));
+        ($e:expr) => (deref_term($e, tyenv));
     }
     /*
      * Recursively apply deref_term to inside constructors of form C(e1, e2, ...).
@@ -94,7 +95,7 @@ fn deref_term(e: &Syntax, tyenv: &HashMap<usize, Type>) -> Syntax {
         Syntax::Put(ref e1, ref e2, ref e3) => pack!(Syntax::Put, e1, e2, e3),
         _ => e.clone(),
     }
-} // TODO 1 case left
+} // TODO 1 case left (LetRec)
 
 /*
  * Checks if type variable r1 occurs in ty.
@@ -117,7 +118,7 @@ fn unify(t1: &Type, t2: &Type,
          tyenv: &mut HashMap<usize, Type>) -> Result<(), TypingError> {
     println!("unify {:?} {:?}", t1, t2);
     macro_rules! invoke {
-        ($t1:expr, $t2:expr) => (unify(t1, t2, extenv, tyenv));
+        ($t1:expr, $t2:expr) => (unify($t1, $t2, extenv, tyenv));
     }
     macro_rules! unify_seq {
         ($t1s:expr, $t2s: expr) => {
@@ -148,7 +149,7 @@ fn unify(t1: &Type, t2: &Type,
         (Type::Var(ref n1), Type::Var(ref n2)) if n1 == n2 => Ok(()),
         (Type::Var(ref n1), _) => {
             if let Some(t1sub) = tyenv.get(n1).cloned() {
-                invoke!(t1sub, t2)
+                invoke!(&t1sub, t2)
             } else {
                 if occur(*n1, t2) {
                     return Err(TypingError::Unify(t1.clone(), t2.clone()));
@@ -157,7 +158,7 @@ fn unify(t1: &Type, t2: &Type,
                 Ok(())
             }
         },
-        (_, Type::Var(ref n2)) => invoke!(t2, t1),
+        (_, Type::Var(_)) => invoke!(t2, t1),
         _ => Err(TypingError::Unify(t1.clone(), t2.clone())),
     }
 }
@@ -165,12 +166,25 @@ fn unify(t1: &Type, t2: &Type,
 
 fn g(env: &HashMap<String, Type>, e: &Syntax,
      extenv: &mut HashMap<String, Type>,
-     tyenv: &mut HashMap<usize, Type>) -> Result<Type, TypingError> {
+     tyenv: &mut HashMap<usize, Type>,
+     id_gen: &mut IdGen) -> Result<Type, TypingError> {
     macro_rules! invoke {
-        ($env:expr, $e:expr) => (g($env, $e, extenv, tyenv));
+        ($env:expr, $e:expr) => (g($env, $e, extenv, tyenv, id_gen));
     }
     macro_rules! typed {
         ($e:expr, $ty:expr) => (try!(unify(&$ty, &try!(invoke!(env, $e)), extenv, tyenv)));
+    }
+    /* map (g env) to an &[Syntax]
+     * &[Syntax] -> Box<[Type]>
+     */
+    macro_rules! g_seq {
+        ($es:expr) => ({
+            let mut argtype = Vec::new();
+            for e in $es.iter() {
+                argtype.push(try!(invoke!(env, e)));
+            }
+            argtype.into_boxed_slice()
+        });
     }
     match *e {
         Syntax::Unit => Ok(Type::Unit),
@@ -213,28 +227,70 @@ fn g(env: &HashMap<String, Type>, e: &Syntax,
         },
         Syntax::Let((ref x, ref t), ref e1, ref e2) => {
             typed!(e1, t);
-            invoke!(panic!(), e2)
+            let mut cp_env = env.clone();
+            cp_env.insert(x.to_string(), t.clone());
+            invoke!(&cp_env, e2)
         },
         Syntax::Var(ref x) => {
-            panic!()
+            if let Some(t) = env.get(x).cloned() {
+                Ok(t)
+            } else if let Some(t) = extenv.get(x).cloned() {
+                Ok(t)
+            } else { // Inference of an external function
+                println!("free variable {} assumed as external@.", x);
+                let t = id_gen.gen_type();
+                extenv.insert(x.to_string(), t.clone());
+                Ok(t)
+            }
         },
         Syntax::LetRec(ref fundef, ref e2) => {
-            panic!()
+            let (x, t) = fundef.name.clone();
+            let yts = &fundef.args;
+            let e1 = fundef.body.clone();
+            let mut cp_env = env.clone();
+            cp_env.insert(x, t.clone());
+            let mut cp_env_body = cp_env.clone();
+            for &(ref x, ref t) in yts.iter() {
+                cp_env_body.insert(x.to_string(), t.clone());
+            }
+            try!(unify(&t,
+                       &Type::Fun(yts.iter()
+                                  .map(|xt| xt.1.clone())
+                                  .collect::<Vec<_>>()
+                                  .into_boxed_slice(), // List.map snd yts
+                                 Box::new(try!(invoke!(&cp_env_body, &e1)))),
+                       extenv, tyenv));
+            invoke!(&cp_env, e2)
         },
         Syntax::App(ref e, ref es) => {
-            panic!()
+            let t = id_gen.gen_type();
+            let funtype = Type::Fun(g_seq!(es), // List.map (g env) es
+                                    Box::new(t.clone()));
+            typed!(e, funtype);
+            Ok(t)
         },
-        Syntax::Tuple(ref es) => {
-            panic!()
-        }
+        Syntax::Tuple(ref es) => Ok(Type::Tuple(g_seq!(es))),
         Syntax::LetTuple(ref xts, ref e1, ref e2) => {
-            panic!()
+            typed!(e1, Type::Tuple(xts.iter()
+                                  .map(|xt| xt.1.clone())
+                                  .collect::<Vec<_>>()
+                                   .into_boxed_slice())); // List.map snd xts
+            let mut cp_env = env.clone();
+            for &(ref x, ref t) in xts.iter() {
+                cp_env.insert(x.to_string(), t.clone());
+            }
+            invoke!(&cp_env, e2)
         },
         Syntax::Array(ref e1, ref e2) => {
-            panic!()
+            typed!(e2, Type::Int);
+            let t = try!(invoke!(env, e1));
+            Ok(Type::Array(Box::new(t)))
         }
         Syntax::Get(ref e1, ref e2) => {
-            panic!()
+            let t = id_gen.gen_type();
+            typed!(e1, Type::Array(Box::new(t.clone())));
+            typed!(e2, Type::Int);
+            Ok(t)
         }
         Syntax::Put(ref e1, ref e2, ref e3) => {
             let t = try!(invoke!(env, e3));
@@ -243,13 +299,18 @@ fn g(env: &HashMap<String, Type>, e: &Syntax,
             Ok(t)
         },
     }
-} // TODO 8 cases left
+}
 
-
+/*
+ * Type-check a given AST e.
+ * TODO: extenv, id_gen should be passed from outside.
+ */
 pub fn f(e: &Syntax) -> Result<Syntax, String> {
     let mut extenv = HashMap::new();
     let mut tyenv = HashMap::new();
-    let typed = g(&HashMap::new(), e, &mut extenv, &mut tyenv).unwrap();
+    let mut id_gen = IdGen::new();
+    let typed = g(&HashMap::new(), e, &mut extenv, &mut tyenv, &mut id_gen)
+        .unwrap();
     println!("{:?}", typed);
     match unify(&Type::Unit, &typed, &mut extenv, &mut tyenv) {
         Err(TypingError::Unify(_, _)) =>
@@ -278,6 +339,31 @@ mod tests{
         let syn = App(Box::new(Var("print_int".to_string())),
                       vec![Int(23)].into_boxed_slice());
         assert!(f(&syn).is_ok()); // top can be :unit.
+    }
+    #[test]
+    fn test_typing_tuple() {
+        use self::Syntax::*;
+        let tuple = Tuple(vec![Int(4), Int(5)]
+                          .into_boxed_slice()); // (4, 5)
+        // let (x: int, y: 'a100) = (...) in x
+        // 100 is used to avoid collision with generated types
+        let let_ex = LetTuple(vec![("x".to_string(), Type::Int),
+                                   ("y".to_string(), Type::Var(100))]
+                              .into_boxed_slice(),
+                              Box::new(tuple),
+                              Box::new(Var("x".to_string())));
+        let printer = App(Box::new(Var("print_int".to_string())),
+                      vec![let_ex].into_boxed_slice()); // print_int (...)
+        assert!(f(&printer).is_ok());
+    }
+    #[test]
+    fn test_typing_array() {
+        use self::Syntax::*;
+        let ary = Array(Box::new(Int(4)), Box::new(Int(5))); // newarray 4 5
+        let access = Get(Box::new(ary), Box::new(Int(2))); // (...).(2)
+        let printer = App(Box::new(Var("print_int".to_string())),
+                      vec![access].into_boxed_slice());
+        assert!(f(&printer).is_ok());
     }
     #[test]
     fn test_deref_typ() {

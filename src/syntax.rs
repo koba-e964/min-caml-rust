@@ -27,9 +27,9 @@ pub enum Syntax {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Fundef {
-    name: (String, Type),
-    args: Box<[(String, Type)]>,
-    body: Box<Syntax>,
+    pub name: (String, Type),
+    pub args: Box<[(String, Type)]>,
+    pub body: Box<Syntax>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
