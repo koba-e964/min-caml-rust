@@ -6,3 +6,4 @@ pub mod syntax;
 pub mod parser;
 pub mod id;
 pub mod typing;
+pub mod k_normal;
