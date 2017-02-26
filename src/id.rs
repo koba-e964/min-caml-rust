@@ -17,4 +17,8 @@ impl IdGen {
         let a = self.gen();
         Type::Var(a)
     }
+    pub fn gen_tmp(&mut self, t: &Type) -> String {
+        let a = self.gen();
+        format!("v{}", a)
+    }
 }
