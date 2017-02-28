@@ -1,27 +1,35 @@
 use nom::{alpha, digit};
 use syntax::*;
+use ordered_float::OrderedFloat;
 
-named!(simple_exp<Syntax>, alt!(
+named!(simple_exp_no_index<Syntax>, alt_complete!(
     ws!(do_parse!(tag!("(") >> res: exp >> tag!(")") >> (res))) |
     ws!(do_parse!(tag!("(") >> tag!(")") >> (Syntax::Unit))) |
     ws!(do_parse!(b: bool_lit >> (Syntax::Bool(b)))) |
+    ws!(do_parse!(f: float_lit >> (Syntax::Float(f.into())))) |
     ws!(do_parse!(i: int_lit >> (Syntax::Int(i)))) |
     ws!(do_parse!(id: ident >> (Syntax::Var(id))))
-    /*
-    ws!(do_parse!(s: simple_exp >>
-                  tag!(".") >>
-                  tag!("(") >>
-                  e: exp >>
-                  tag!(")") >>
-                  (Syntax::Get(Box::new(s), Box::new(e)))))
-     */
-)); // TODO 5/7 done
+));
 
-named!(pub exp<Syntax>, alt!(
+named!(simple_exp<Syntax>,
+       ws!(do_parse!(
+           init: simple_exp_no_index >>
+               res: fold_many0!(
+                   ws!(do_parse!(char!('.') >> char!('(') >> res: exp >> char!(')') >> (res))),
+                   init,
+                   |acc, index| {
+                       Syntax::Get(Box::new(acc), Box::new(index))
+                   }
+               ) >>
+               (res)
+       ))
+);
+
+named!(pub exp<Syntax>, alt_complete!(
     ws!(simple_exp)
 )); // TODO 1/23 done
 
-named!(bool_lit<bool>, alt!(
+named!(bool_lit<bool>, alt_complete!(
     ws!(do_parse!(tag!("true") >> (true))) |
     ws!(do_parse!(tag!("false") >> (false)))
 ));
@@ -30,6 +38,17 @@ named!(int_lit<i64>, ws!(do_parse!(
     x: digit >>
         (convert(x, 10))
 )));
+
+// TODO supports only digit+ . digit+
+named!(float_lit<f64>, ws!(do_parse!(
+    fstr: recognize!(do_parse!(
+        x: digit >>
+            s: preceded!(char!('.'), digit)
+            >> (())) ) >>
+        (convert_to_f64(fstr))
+)));
+                          
+
 named!(ident<String>, ws!(do_parse!(
     s: alpha >>
         (String::from_utf8(s.to_vec()).unwrap())
@@ -41,6 +60,27 @@ fn convert(x: &[u8], radix: i64) -> i64 {
     for &v in x.iter() {
         cur *= radix;
         cur += v as i64 - b'0' as i64;
+    }
+    cur
+}
+fn convert_to_f64(x: &[u8]) -> f64 {
+    let mut cur = 0.0;
+    let mut dot = false;
+    let mut base = 1.0;
+    for &v in x.iter() {
+        let mut tmp = 0.0;
+        if v == b'.' {
+            dot = true;
+        } else {
+            tmp = (v as i64 - b'0' as i64) as f64 * base;
+        }
+        if !dot {
+            cur *= 10.0;
+        }
+        cur += tmp;
+        if dot {
+            base /= 10.0;
+        }
     }
     cur
 }
@@ -169,11 +209,11 @@ fn test_simple_exp() {
                                             Var("c".to_string())));
     assert_eq!(exp(b"() "), IResult::Done(&[0u8; 0][..], Unit));
     assert_eq!(exp(b"100"), IResult::Done(&[0u8; 0][..], Int(100)));
-    /* TODO Not implemented
     assert_eq!(exp(b"10.0"), IResult::Done(&[0u8; 0][..], Float(10.0.into())));
+    assert_eq!(exp(b"1256.25"),
+               IResult::Done(&[0u8; 0][..], Float(1256.25.into())));
     assert_eq!(exp(b"a.(b)"),
                IResult::Done(&[0u8; 0][..],
                              Get(Box::new(Var("a".to_string())),
                                  Box::new(Var("b".to_string())))));
-     */
 }
