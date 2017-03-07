@@ -107,13 +107,33 @@ fn g(env: &HashMap<String, Type>, e: Syntax, id_gen: &mut IdGen, extenv: &HashMa
             }
         });
     }
+    macro_rules! insert_let_macro_with_env {
+        ($et:expr, $k:expr, $env:expr, $id_gen:expr, $extenv:expr) => ({
+            let (e, t) = $et;
+            match e {
+                KNormal::Var(x) => $k(x),
+                _ => {
+                    let x = $id_gen.gen_tmp(&t);
+                    let (e2, t2) = $k(x.clone());
+                    (KNormal::Let((x, t), Box::new(e), Box::new(e2)), t2)
+                },
+            }
+        });
+    }
     macro_rules! invoke {
         ($e:expr) => (g(env, $e, id_gen, extenv));
     }
+    // (Syntax, F) -> KNormal where F: Fn(String) -> (KNormal, Type)
     macro_rules! insert_let_helper {
         ($e:expr, $k:expr) => ({
             let e = invoke!($e);
             insert_let_macro!(e, $k)
+        });
+    }
+    macro_rules! insert_let_helper_with_env {
+        ($e:expr, $k:expr, $env:expr, $id_gen:expr, $extenv:expr) => ({
+            let e = g($env, $e, $id_gen, $extenv);
+            insert_let_macro_with_env!(e, $k, $env, $id_gen, $extenv)
         });
     }
     macro_rules! insert_let_binop {
@@ -182,11 +202,39 @@ fn g(env: &HashMap<String, Type>, e: Syntax, id_gen: &mut IdGen, extenv: &HashMa
                 _ => panic!(format!("external variable {} does not have an array type", x)),
             }
         },
-        Syntax::LetRec(_, e2) => panic!(),
-        Syntax::App(f, e2s) => panic!(),
-        Syntax::Tuple(es) => panic!(),
-        Syntax::LetTuple(xts, e1, e2) => panic!(),
-        Syntax::Array(e1, e2) => panic!(),
+        Syntax::LetRec(_, e2) => unimplemented!(),
+        Syntax::App(e1, e2s) => {
+            let g_e1 = invoke!(*e1);
+            match g_e1.1.clone() {
+                Type::Fun(_, t) => {
+                    // TODO very rough way to simulate an internal recursive function in the original code
+                    insert_let_macro!(
+                        g_e1.clone(),
+                        |f: String| {
+                            fn bind(mut xs: Vec<String>, p: usize, id_gen: &mut IdGen, extenv: &HashMap<String, Type>, env: &HashMap<String, Type>, e2s: &[Syntax], t: Type, f: String) -> (KNormal, Type) {
+                                let n = e2s.len();
+                                if p == n {
+                                    (KNormal::App(
+                                        f.clone(),
+                                        xs.clone().into_boxed_slice()),
+                                     t.clone())
+                                } else {
+                                    insert_let_helper_with_env!(e2s[p].clone(),
+                                                       |x: String| {
+                                                           xs.push(x.clone());
+                                                           bind(xs, p + 1, id_gen, extenv, env, e2s, t, f)
+                                                       }, env, id_gen, extenv)
+                                }
+                            }
+                            bind(Vec::new(), 0, id_gen, extenv, env, &e2s, (*t).clone(), f)
+                        })
+                },
+                _ => panic!(),
+            }
+        },
+        Syntax::Tuple(es) => unimplemented!(),
+        Syntax::LetTuple(xts, e1, e2) => unimplemented!(),
+        Syntax::Array(e1, e2) => unimplemented!(),
         Syntax::Get(e1, e2) => {
             let g_e1 = invoke!(*e1);
             match g_e1.1.clone() {
@@ -258,5 +306,24 @@ mod tests {
                                     x(), x(),
                                     Box::new(KNormal::Var(y())),
                                     Box::new(KNormal::Var(z()))), Type::Int))
+    }
+    #[test]
+    fn test_g_app() {
+        let mut id_gen = IdGen::new();
+        let extenv = HashMap::new();
+        // x y z
+        // ==> App(x, [y, z])
+        let x = || "x".to_string();
+        let y = || "y".to_string();
+        let z = || "z".to_string();
+        let env = vec![(x(), Type::Fun(vec![Type::Int; 2].into_boxed_slice(),
+                                       Box::new(Type::Int))),
+                       (y(), Type::Int),
+                       (z(), Type::Int)].into_iter().collect();
+        let expr = Syntax::App(Box::new(Syntax::Var(x())),
+                               vec![Syntax::Var(y()), Syntax::Var(z())].into_boxed_slice());
+        assert_eq!(g(&env, expr, &mut id_gen, &extenv),
+                   (KNormal::App(x(), vec![y(), z()].into_boxed_slice()),
+                    Type::Int))
     }
 }
