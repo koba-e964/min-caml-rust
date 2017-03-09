@@ -208,31 +208,53 @@ fn g(env: &HashMap<String, Type>, e: Syntax, id_gen: &mut IdGen, extenv: &HashMa
             match g_e1.1.clone() {
                 Type::Fun(_, t) => {
                     // TODO very rough way to simulate an internal recursive function in the original code
+                    fn bind(mut xs: Vec<String>, p: usize, id_gen: &mut IdGen, extenv: &HashMap<String, Type>, env: &HashMap<String, Type>, e2s: &[Syntax], t: Type, f: String) -> (KNormal, Type) {
+                        let n = e2s.len();
+                        if p == n {
+                            (KNormal::App(
+                                f.clone(),
+                                xs.clone().into_boxed_slice()),
+                             t.clone())
+                        } else {
+                            insert_let_helper_with_env!(e2s[p].clone(),
+                                                        |x: String| {
+                                                            xs.push(x.clone());
+                                                            bind(xs, p + 1, id_gen, extenv, env, e2s, t, f)
+                                                        }, env, id_gen, extenv)
+                        }
+                    }
                     insert_let_macro!(
                         g_e1.clone(),
-                        |f: String| {
-                            fn bind(mut xs: Vec<String>, p: usize, id_gen: &mut IdGen, extenv: &HashMap<String, Type>, env: &HashMap<String, Type>, e2s: &[Syntax], t: Type, f: String) -> (KNormal, Type) {
-                                let n = e2s.len();
-                                if p == n {
-                                    (KNormal::App(
-                                        f.clone(),
-                                        xs.clone().into_boxed_slice()),
-                                     t.clone())
-                                } else {
-                                    insert_let_helper_with_env!(e2s[p].clone(),
-                                                       |x: String| {
-                                                           xs.push(x.clone());
-                                                           bind(xs, p + 1, id_gen, extenv, env, e2s, t, f)
-                                                       }, env, id_gen, extenv)
-                                }
-                            }
-                            bind(Vec::new(), 0, id_gen, extenv, env, &e2s, (*t).clone(), f)
-                        })
+                        |f: String|
+                        bind(Vec::new(), 0, id_gen, extenv, env,
+                             &e2s, (*t).clone(), f))
                 },
                 _ => panic!(),
             }
         },
-        Syntax::Tuple(es) => unimplemented!(),
+        Syntax::Tuple(es) => {
+            fn bind(mut xs: Vec<String>, mut ts: Vec<Type>, p: usize,
+                    env: &HashMap<String, Type>, id_gen: &mut IdGen,
+                    extenv: &HashMap<String, Type>, es: &[Syntax])
+                    -> (KNormal, Type) {
+                let n = es.len();
+                if p == n {
+                    (KNormal::Tuple(xs.into_boxed_slice()),
+                     Type::Tuple(ts.into_boxed_slice()))
+                } else {
+                    let (ex, tx) = g(env, es[p].clone(), id_gen, extenv); 
+                    insert_let_macro_with_env!((ex, tx.clone()),
+                                                |x: String| {
+                                                    xs.push(x.clone());
+                                                    ts.push(tx);
+                                                    bind(xs, ts, p + 1,
+                                                         env, id_gen, extenv,
+                                                         es)
+                                                }, env, id_gen, extenv)
+                }
+            }
+            bind(Vec::new(), Vec::new(), 0, env, id_gen, extenv, &es)
+        },
         Syntax::LetTuple(xts, e1, e2) => unimplemented!(),
         Syntax::Array(e1, e2) => unimplemented!(),
         Syntax::Get(e1, e2) => {
@@ -253,7 +275,7 @@ fn g(env: &HashMap<String, Type>, e: Syntax, id_gen: &mut IdGen, extenv: &HashMa
                         (KNormal::Put(x, y, z), Type::Unit))))
                 
         },
-    } // TODO 5 cases remaining
+    } // TODO 3 cases remaining
 }
 
 
@@ -325,5 +347,27 @@ mod tests {
         assert_eq!(g(&env, expr, &mut id_gen, &extenv),
                    (KNormal::App(x(), vec![y(), z()].into_boxed_slice()),
                     Type::Int))
+    }
+    #[test]
+    fn test_g_tuple() {
+        let mut id_gen = IdGen::new();
+        let extenv = HashMap::new();
+        // (x, y, 1.0)
+        // ==> Let(d0, 1.0, Tuple(x, y, d0))
+        let x = || "x".to_string();
+        let y = || "y".to_string();
+        let d0 = || "d0".to_string(); // Temporary variable of type float
+        let env = vec![(x(), Type::Bool),
+                       (y(), Type::Int)].into_iter().collect();
+        let expr = Syntax::Tuple(vec![Syntax::Var(x()),
+                                 Syntax::Var(y()),
+                                 Syntax::Float(1.0.into())].into_boxed_slice());
+        assert_eq!(g(&env, expr, &mut id_gen, &extenv),
+                   (KNormal::Let((d0(), Type::Float),
+                                 Box::new(KNormal::Float(1.0.into())),
+                                 Box::new(KNormal::Tuple(
+                                     vec![x(), y(), d0()].into_boxed_slice()))),
+                    Type::Tuple(vec![Type::Bool, Type::Int, Type::Float]
+                                .into_boxed_slice())))
     }
 }
