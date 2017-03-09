@@ -255,7 +255,20 @@ fn g(env: &HashMap<String, Type>, e: Syntax, id_gen: &mut IdGen, extenv: &HashMa
             }
             bind(Vec::new(), Vec::new(), 0, env, id_gen, extenv, &es)
         },
-        Syntax::LetTuple(xts, e1, e2) => unimplemented!(),
+        Syntax::LetTuple(xts, e1, e2) => {
+            insert_let_helper!(*e1,
+                               move |y| {
+                                   let mut cp_env = env.clone();
+                                   for &(ref x, ref t) in xts.iter() {
+                                       cp_env.insert(x.clone(), t.clone());
+                                   }
+                                   let (e2p, t2) = g(&cp_env, *e2, id_gen,
+                                                     extenv);
+                                   (KNormal::LetTuple(xts, y, Box::new(e2p)),
+                                    t2)
+                               }
+            )
+        },
         Syntax::Array(e1, e2) => unimplemented!(),
         Syntax::Get(e1, e2) => {
             let g_e1 = invoke!(*e1);
@@ -275,7 +288,7 @@ fn g(env: &HashMap<String, Type>, e: Syntax, id_gen: &mut IdGen, extenv: &HashMa
                         (KNormal::Put(x, y, z), Type::Unit))))
                 
         },
-    } // TODO 3 cases remaining
+    } // TODO 2 cases remaining
 }
 
 
@@ -369,5 +382,51 @@ mod tests {
                                      vec![x(), y(), d0()].into_boxed_slice()))),
                     Type::Tuple(vec![Type::Bool, Type::Int, Type::Float]
                                 .into_boxed_slice())))
+    }
+    #[test]
+    fn test_g_let_tuple() {
+        let mut id_gen = IdGen::new();
+        let extenv = HashMap::new();
+        // let (x: bool, y: int, z: float) = f(1) in x
+        // ==> LetTuple([x, y, z], f(1), x)
+        // f: int -> (bool, int, float)
+        let x = || "x".to_string();
+        let y = || "y".to_string();
+        let z = || "z".to_string();
+        let f = || "f".to_string();
+        let i0 = || "i0".to_string(); // temporary variable of type int
+        let t1 = || "t1".to_string(); // temporary variable of type tuple
+        let tuple_ty = Type::Tuple(vec![Type::Bool, Type::Int, Type::Float]
+                                   .into_boxed_slice());
+        let env = vec![(f(),
+                        Type::Fun(vec![Type::Int].into_boxed_slice(),
+                                  Box::new(tuple_ty.clone())))]
+            .into_iter().collect();
+        let args_list = vec![(x(), Type::Bool),
+                             (y(), Type::Int),
+                             (z(), Type::Float)]
+            .into_boxed_slice();
+        let expr = Syntax::LetTuple(
+            args_list.clone(),
+            Box::new(Syntax::App(Box::new(Syntax::Var(f())),
+                                 vec![Syntax::Int(1)].into_boxed_slice())),
+            Box::new(Syntax::Var(x())));
+        let expected = (KNormal::Let((t1(), tuple_ty),
+                                     Box::new(
+                                         KNormal::Let(
+                                             (i0(), Type::Int),
+                                             Box::new(KNormal::Int(1)),
+                                             Box::new(KNormal::App(
+                                                 f(),
+                                                 vec![i0()]
+                                                     .into_boxed_slice())))),
+                                     Box::new(
+                                         KNormal::LetTuple(
+                                             args_list,
+                                             t1(),
+                                             Box::new(KNormal::Var(x()))))),
+        Type::Bool);
+        assert_eq!(g(&env, expr, &mut id_gen, &extenv),
+                   expected);
     }
 }
