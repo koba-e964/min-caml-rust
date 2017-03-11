@@ -269,7 +269,21 @@ fn g(env: &HashMap<String, Type>, e: Syntax, id_gen: &mut IdGen, extenv: &HashMa
                                }
             )
         },
-        Syntax::Array(e1, e2) => unimplemented!(),
+        Syntax::Array(e1, e2) => {
+            insert_let_helper!(*e1,
+                               move |x| {
+                                   let g_e2 = invoke!((*e2).clone());
+                                   let t2 = g_e2.1.clone();
+                                   insert_let_macro!(g_e2,
+                                                     move |y| {
+                                                         let l = match t2.clone() {
+                                                             Type::Float => "create_float_array",
+                                                             _ => "create_array",
+                                                         }.to_string();
+                                                         (KNormal::ExtFunApp(l, vec![x, y].into_boxed_slice()), Type::Array(Box::new(t2)))
+                                                     })
+                               })
+        },
         Syntax::Get(e1, e2) => {
             let g_e1 = invoke!(*e1);
             match g_e1.1.clone() {
@@ -288,7 +302,7 @@ fn g(env: &HashMap<String, Type>, e: Syntax, id_gen: &mut IdGen, extenv: &HashMa
                         (KNormal::Put(x, y, z), Type::Unit))))
                 
         },
-    } // TODO 2 cases remaining
+    } // TODO 1 case remaining
 }
 
 
@@ -428,5 +442,25 @@ mod tests {
         Type::Bool);
         assert_eq!(g(&env, expr, &mut id_gen, &extenv),
                    expected);
+    }
+    #[test]
+    fn test_g_array_int() {
+        let mut id_gen = IdGen::new();
+        let extenv = HashMap::new();
+        // create_array x 5
+        // ==> Let((i0, Int), 5, ExtFunApp("create_array", [x, i0]))
+        let x = || "x".to_string();
+        let i0 = || "i0".to_string(); // Temporary variable of type float
+        let env = vec![(x(), Type::Int)].into_iter().collect();
+        let expr = Syntax::Array(Box::new(Syntax::Var(x())),
+                                 Box::new(Syntax::Int(5)));
+        let expected = KNormal::Let((i0(), Type::Int),
+                                    Box::new(KNormal::Int(5)),
+                                    Box::new(KNormal::ExtFunApp(
+                                        "create_array".to_string(),
+                                        vec![x(), i0()].into_boxed_slice())));
+        assert_eq!(g(&env, expr, &mut id_gen, &extenv),
+                   (expected,
+                    Type::Array(Box::new(Type::Int))))
     }
 }
