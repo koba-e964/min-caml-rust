@@ -1,5 +1,5 @@
 use ordered_float::OrderedFloat;
-use syntax::{IntBin, FloatBin, CompBin, Syntax, Type};
+use syntax::{IntBin, FloatBin, CompBin, Syntax, Type, Fundef};
 use id::{IdGen};
 use std::collections::{HashMap, HashSet};
 
@@ -33,9 +33,9 @@ pub struct KFundef {
 }
 
 /*
- * Free variables in an AST
+ * Free variables in an AST, used in elim.rs
  */
-fn fv(e: &KNormal) -> HashSet<String> {
+pub fn fv(e: &KNormal) -> HashSet<String> {
     macro_rules! invoke {
         ($e:expr) => (fv($e));
     }
@@ -202,7 +202,21 @@ fn g(env: &HashMap<String, Type>, e: Syntax, id_gen: &mut IdGen, extenv: &HashMa
                 _ => panic!(format!("external variable {} does not have an array type", x)),
             }
         },
-        Syntax::LetRec(_, e2) => unimplemented!(),
+        Syntax::LetRec(fundef, e2) => {
+            let Fundef {name: (x, t), args: yts, body: e1} = fundef;
+            let mut cp_env = env.clone();
+            cp_env.insert(x.clone(), t.clone());
+            let (e2p, t2) = g(&cp_env, *e2, id_gen, extenv);
+            for &(ref y, ref yt) in yts.iter() {
+                cp_env.insert(y.clone(), yt.clone());
+            }
+            let (e1p, _t1) = g(&cp_env, *e1, id_gen, extenv);
+            (KNormal::LetRec(
+                KFundef { name: (x, t), args: yts, body: Box::new(e1p) },
+                Box::new(e2p)),
+             t2)
+        },
+        // TODO extfunapp needs handling
         Syntax::App(e1, e2s) => {
             let g_e1 = invoke!(*e1);
             match g_e1.1.clone() {
@@ -302,7 +316,7 @@ fn g(env: &HashMap<String, Type>, e: Syntax, id_gen: &mut IdGen, extenv: &HashMa
                         (KNormal::Put(x, y, z), Type::Unit))))
                 
         },
-    } // TODO 1 case remaining
+    }
 }
 
 
@@ -450,7 +464,7 @@ mod tests {
         // create_array x 5
         // ==> Let((i0, Int), 5, ExtFunApp("create_array", [x, i0]))
         let x = || "x".to_string();
-        let i0 = || "i0".to_string(); // Temporary variable of type float
+        let i0 = || "i0".to_string(); // Temporary variable of type int
         let env = vec![(x(), Type::Int)].into_iter().collect();
         let expr = Syntax::Array(Box::new(Syntax::Var(x())),
                                  Box::new(Syntax::Int(5)));
@@ -462,5 +476,54 @@ mod tests {
         assert_eq!(g(&env, expr, &mut id_gen, &extenv),
                    (expected,
                     Type::Array(Box::new(Type::Int))))
+    }
+    #[test]
+    fn test_g_letrec() {
+        let mut id_gen = IdGen::new();
+        let extenv = HashMap::new();
+        // let rec f x = g x (f y) in f z
+        // ==> LetRec(KFundef { name: ("f", Fun([Int], Int)), args: [("x", Int)], body: Let(("i0", Int), App("f", ["y"]), App("g", ["x", "i0"])) }, App("f", ["z"]))
+        let x = || "x".to_string();
+        let y = || "y".to_string();
+        let z = || "z".to_string();
+        let f = || "f".to_string();
+        let g_id = || "g".to_string();
+        let i0 = || "i0".to_string(); // Temporary variable of type int
+        let env = vec![(y(), Type::Int),
+                       (z(), Type::Int),
+                       (g_id(), Type::Fun(vec![Type::Int; 2].into_boxed_slice(),
+                                          Box::new(Type::Int)))]
+            .into_iter().collect();
+        let body = Syntax::App(
+            Box::new(Syntax::Var(g_id())),
+            vec![Syntax::Var(x()), Syntax::App(
+                Box::new(Syntax::Var(f())),
+                         vec![Syntax::Var(y())].into_boxed_slice())]
+                .into_boxed_slice());
+        let fundef = Fundef {
+            name: (f(), Type::Fun(vec![Type::Int].into_boxed_slice(),
+                                  Box::new(Type::Int))),
+            args: vec![(x(), Type::Int)].into_boxed_slice(),
+            body: Box::new(body),
+            
+        };
+        let expr = Syntax::LetRec(fundef,
+                                  Box::new(Syntax::App(
+                                      Box::new(Syntax::Var(f())),
+                                      vec![Syntax::Var(z())].into_boxed_slice()
+                                  )));
+        let body_trans = KNormal::Let(
+            (i0(), Type::Int),
+            Box::new(KNormal::App(f(), vec![y()].into_boxed_slice())),
+            Box::new(KNormal::App(g_id(), vec![x(), i0()].into_boxed_slice())));
+        let expected = (KNormal::LetRec(
+            KFundef {
+                name: (f(), Type::Fun(vec![Type::Int].into_boxed_slice(),
+                                      Box::new(Type::Int))),
+                args: vec![(x(), Type::Int)].into_boxed_slice(),
+                body: Box::new(body_trans) },
+            Box::new(KNormal::App(f(), vec![z()].into_boxed_slice()))),
+                        Type::Int);
+        assert_eq!(g(&env, expr, &mut id_gen, &extenv), expected)
     }
 }
