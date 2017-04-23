@@ -352,6 +352,11 @@ fn g(env: &HashMap<String, Type>, e: Syntax, id_gen: &mut IdGen, extenv: &HashMa
 }
 
 
+pub fn f(e: Syntax, id_gen: &mut IdGen, extenv: &HashMap<String, Type>)
+         -> (KNormal, Type) {
+    g(&HashMap::new(), e, id_gen, extenv)
+}
+
 
 #[cfg(test)]
 mod tests {
