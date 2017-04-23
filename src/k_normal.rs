@@ -216,34 +216,66 @@ fn g(env: &HashMap<String, Type>, e: Syntax, id_gen: &mut IdGen, extenv: &HashMa
                 Box::new(e2p)),
              t2)
         },
-        // TODO extfunapp needs handling
         Syntax::App(e1, e2s) => {
-            let g_e1 = invoke!(*e1);
-            match g_e1.1.clone() {
-                Type::Fun(_, t) => {
-                    // TODO very rough way to simulate an internal recursive function in the original code
-                    fn bind(mut xs: Vec<String>, p: usize, id_gen: &mut IdGen, extenv: &HashMap<String, Type>, env: &HashMap<String, Type>, e2s: &[Syntax], t: Type, f: String) -> (KNormal, Type) {
-                        let n = e2s.len();
-                        if p == n {
-                            (KNormal::App(
-                                f.clone(),
-                                xs.clone().into_boxed_slice()),
-                             t.clone())
-                        } else {
-                            insert_let_helper_with_env!(e2s[p].clone(),
-                                                        |x: String| {
-                                                            xs.push(x.clone());
-                                                            bind(xs, p + 1, id_gen, extenv, env, e2s, t, f)
-                                                        }, env, id_gen, extenv)
+            let mut extfunname = None;
+            if let Syntax::Var(ref f) = *e1 {
+                if !env.contains_key(f) && extenv.contains_key(f) {
+                    extfunname = Some(f.to_string());
+                }
+            }
+            if extfunname == None {
+                let g_e1 = invoke!(*e1);
+                match g_e1.1.clone() {
+                    Type::Fun(_, t) => {
+                        // TODO very rough way to simulate an internal recursive function in the original code
+                        fn bind(mut xs: Vec<String>, p: usize, id_gen: &mut IdGen, extenv: &HashMap<String, Type>, env: &HashMap<String, Type>, e2s: &[Syntax], t: Type, f: String) -> (KNormal, Type) {
+                            let n = e2s.len();
+                            if p == n {
+                                (KNormal::App(
+                                    f.clone(),
+                                    xs.clone().into_boxed_slice()),
+                                 t.clone())
+                            } else {
+                                insert_let_helper_with_env!(e2s[p].clone(),
+                                                            |x: String| {
+                                                                xs.push(x.clone());
+                                                                bind(xs, p + 1, id_gen, extenv, env, e2s, t, f)
+                                                            }, env, id_gen, extenv)
+                            }
                         }
-                    }
-                    insert_let_macro!(
-                        g_e1.clone(),
-                        |f: String|
+                        insert_let_macro!(
+                            g_e1.clone(),
+                            |f: String|
+                            bind(Vec::new(), 0, id_gen, extenv, env,
+                                 &e2s, (*t).clone(), f))
+                    },
+                    _ => panic!(),
+                }
+            } else { // extfunname = Some(_)
+                let extfunname = extfunname.unwrap();
+                match extenv.get(&extfunname).unwrap().clone() {
+                    Type::Fun(_, t) => {
+                        // TODO very rough way to simulate an internal recursive function in the original code
+                        fn bind(mut xs: Vec<String>, p: usize, id_gen: &mut IdGen, extenv: &HashMap<String, Type>, env: &HashMap<String, Type>, e2s: &[Syntax], t: Type, f: String) -> (KNormal, Type) {
+                            let n = e2s.len();
+                            if p == n {
+                                (KNormal::ExtFunApp(
+                                    f.clone(),
+                                    xs.clone().into_boxed_slice()),
+                                 t.clone())
+                            } else {
+                                insert_let_helper_with_env!(e2s[p].clone(),
+                                                            |x: String| {
+                                                                xs.push(x.clone());
+                                                                bind(xs, p + 1, id_gen, extenv, env, e2s, t, f)
+                                                            }, env, id_gen, extenv)
+                            }
+                        }
                         bind(Vec::new(), 0, id_gen, extenv, env,
-                             &e2s, (*t).clone(), f))
-                },
-                _ => panic!(),
+                             &e2s, (*t).clone(), extfunname)
+                    },
+                    _ => panic!(),
+                }
             }
         },
         Syntax::Tuple(es) => {
@@ -388,6 +420,24 @@ mod tests {
         assert_eq!(g(&env, expr, &mut id_gen, &extenv),
                    (KNormal::App(x(), vec![y(), z()].into_boxed_slice()),
                     Type::Int))
+    }
+    #[test]
+    fn test_g_extfunapp() {
+        let mut id_gen = IdGen::new();
+        // x y z
+        // ==> App(x, [y, z])
+        let y = || "y".to_string();
+        let print_int = || "print_int".to_string();
+        let mut extenv = HashMap::new();
+        extenv.insert(print_int(),
+                      Type::Fun(vec![Type::Int].into_boxed_slice(),
+                      Box::new(Type::Unit)));
+        let env = vec![(y(), Type::Int)].into_iter().collect();
+        let expr = Syntax::App(Box::new(Syntax::Var(print_int())),
+                               vec![Syntax::Var(y())].into_boxed_slice());
+        assert_eq!(g(&env, expr, &mut id_gen, &extenv),
+                   (KNormal::ExtFunApp(print_int(), vec![y()].into_boxed_slice()),
+                    Type::Unit))
     }
     #[test]
     fn test_g_tuple() {
