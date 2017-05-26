@@ -25,9 +25,35 @@ named!(simple_exp<Syntax>,
        ))
 );
 
-named!(pub exp<Syntax>, alt_complete!(
+named!(pub exp<Syntax>, ws!(exp_let));
+
+named!(exp_let<Syntax>, alt_complete!(
+    ws!(do_parse!(
+        tag!("let") >>
+            id: ident >>
+            tag!("=") >>
+            e1: exp >>
+            tag!("in") >>
+            e2: exp_let >>
+            (Syntax::Let((id, Type::Unit /* TODO should be uniquely assigned to a var */), Box::new(e1), Box::new(e2)))
+    )) |
+    ws!(exp0)
+));
+
+
+named!(exp0<Syntax>, alt_complete!(
+    ws!(do_parse!(tag!("!") >> res: exp0 >> (Syntax::Not(Box::new(res))))) |
+    ws!(do_parse!(
+        init: exp1 >>
+            res: many1!(ws!(simple_exp)) >>
+            (Syntax::App(Box::new(init), res.into_boxed_slice()))
+    )) |
+    ws!(exp1)
+));
+
+named!(exp1<Syntax>, alt_complete!(
     ws!(simple_exp)
-)); // TODO 1/23 done
+));
 
 named!(bool_lit<bool>, alt_complete!(
     ws!(do_parse!(tag!("true") >> (true))) |
@@ -50,9 +76,17 @@ named!(float_lit<f64>, ws!(do_parse!(
                           
 
 named!(ident<String>, ws!(do_parse!(
+    peek!(not!(reserved)) >>
     s: alpha >>
         (String::from_utf8(s.to_vec()).unwrap())
 )));
+
+named!(reserved, alt_complete!(
+    tag!("let") |
+    tag!("in") |
+    tag!("true") |
+    tag!("false")
+));
 
 
 fn convert(x: &[u8], radix: i64) -> i64 {
@@ -201,6 +235,22 @@ pat:
 */
 
 
+/*
+Operator precedence:
+
+%right prec_let
+%right SEMICOLON
+%right prec_if
+%right LESS_MINUS
+%left COMMA
+%left EQUAL LESS_GREATER LESS GREATER LESS_EQUAL GREATER_EQUAL
+%left PLUS MINUS PLUS_DOT MINUS_DOT
+%left AST_DOT SLASH_DOT
+%right prec_unary_minus
+%left prec_app
+%left DOT
+*/
+
 #[test]
 fn test_simple_exp() {
     use nom::IResult;
@@ -216,4 +266,40 @@ fn test_simple_exp() {
                IResult::Done(&[0u8; 0][..],
                              Get(Box::new(Var("a".to_string())),
                                  Box::new(Var("b".to_string())))));
+}
+
+#[test]
+fn test_let() {
+    use nom::IResult;
+    use self::Syntax::{Int, Let};
+    let result = exp(b"let x = 0 in 1").unwrap();
+    assert_eq!(result.0, &[0u8; 0]);
+    match result.1 {
+        Let((id, _), e1, e2) =>
+            assert_eq!(*e1, Int(0)),
+        _ => panic!(),
+    }
+}
+
+
+#[test]
+fn test_exp_not() {
+    use nom::IResult;
+    use self::Syntax::{Bool, Not};
+    assert_eq!(exp(b"!!true"),
+               IResult::Done(&[0u8; 0][..],
+                             Not(
+                                 Box::new(Not(
+                                     Box::new(Bool(true)))))));
+}
+
+#[test]
+fn test_app() {
+    use nom::IResult;
+    use self::Syntax::{App, Int, Var};
+    assert_eq!(exp(b"func 0 1"),
+               IResult::Done(&[0u8; 0][..],
+                             App(
+                                 Box::new(Var("func".to_string())),
+                                 vec![Int(0), Int(1)].into_boxed_slice())));
 }
