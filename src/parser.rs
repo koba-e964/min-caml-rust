@@ -61,20 +61,21 @@ macro_rules! stub_rule {
     }
 }
 
-stub_rule!(exp_assign, exp0);
+stub_rule!(exp_assign, exp_comma);
+stub_rule!(exp_comma, exp_comparative);
+stub_rule!(exp_comparative, exp_additive);
+stub_rule!(exp_additive, exp_multiplicative);
+stub_rule!(exp_multiplicative, exp_unary_minus);
+stub_rule!(exp_unary_minus, exp_app);
 
 
-named!(exp0<Syntax>, alt_complete!(
-    ws!(do_parse!(tag!("!") >> res: exp0 >> (Syntax::Not(Box::new(res))))) |
+named!(exp_app<Syntax>, alt_complete!(
+    ws!(do_parse!(tag!("!") >> res: exp_app >> (Syntax::Not(Box::new(res))))) |
     ws!(do_parse!(
-        init: exp1 >>
+        init: simple_exp >>
             res: many1!(ws!(simple_exp)) >>
             (Syntax::App(Box::new(init), res.into_boxed_slice()))
     )) |
-    ws!(exp1)
-));
-
-named!(exp1<Syntax>, alt_complete!(
     ws!(simple_exp)
 ));
 
