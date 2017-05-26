@@ -37,8 +37,31 @@ named!(exp_let<Syntax>, alt_complete!(
             e2: exp_let >>
             (Syntax::Let((id, Type::Unit /* TODO should be uniquely assigned to a var */), Box::new(e1), Box::new(e2)))
     )) |
-    ws!(exp0)
+    ws!(exp_if)
+)); // 1/3 done (missing: letrec, lettuple)
+
+named!(exp_if<Syntax>, alt_complete!(
+    ws!(do_parse!(
+        tag!("if") >>
+            e1: exp >>
+            tag!("then") >>
+            e2: exp >>
+            tag!("else") >>
+            e3: exp_if >>
+            (Syntax::If(Box::new(e1), Box::new(e2), Box::new(e3)))
+    )) |
+    ws!(exp_assign)
 ));
+
+macro_rules! stub_rule {
+    ($rulename:ident, $redirect_to: ident) => {
+        named!($rulename<Syntax>, alt_complete!(
+            ws!($redirect_to)
+        ));
+    }
+}
+
+stub_rule!(exp_assign, exp0);
 
 
 named!(exp0<Syntax>, alt_complete!(
@@ -85,7 +108,10 @@ named!(reserved, alt_complete!(
     tag!("let") |
     tag!("in") |
     tag!("true") |
-    tag!("false")
+    tag!("false") |
+    tag!("if") |
+    tag!("then") |
+    tag!("else")
 ));
 
 
@@ -281,6 +307,18 @@ fn test_let() {
     }
 }
 
+#[test]
+fn test_if() {
+    use nom::IResult;
+    use self::Syntax::{App, Int, If, Var};
+    assert_eq!(exp(b"if f 3 then 4 else 0"),
+               IResult::Done(&[0u8; 0][..],
+                             If(
+                                 Box::new(App(Box::new(Var("f".to_string())),
+                                              vec![Int(3)].into_boxed_slice())),
+                                 Box::new(Int(4)),
+                                 Box::new(Int(0)))));
+}
 
 #[test]
 fn test_exp_not() {
