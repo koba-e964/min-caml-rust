@@ -177,7 +177,7 @@ fn g(env: &HashMap<String, Type>, e: Syntax, id_gen: &mut IdGen, extenv: &HashMa
                             (*e2).clone(), // TODO maybe unnecessary cloning, but needed to squelch borrow checker
                             |y| {
                                 let (e3p, t3) = invoke!((*e3).clone());
-                                let (e4p, t4) = invoke!((*e4).clone());
+                                let (e4p, _t4) = invoke!((*e4).clone());
                                 (KNormal::IfComp(op, x, y, Box::new(e3p),
                                                  Box::new(e4p)), t3)
                             })),
@@ -186,7 +186,7 @@ fn g(env: &HashMap<String, Type>, e: Syntax, id_gen: &mut IdGen, extenv: &HashMa
             }
         },
         Syntax::Let((x, t), e1, e2) => {
-            let (e1, t1) = invoke!(*e1);
+            let (e1, _t1) = invoke!(*e1);
             let mut cp_env = env.clone();
             cp_env.insert(x.clone(), t.clone());
             let (e2, t2) = g(&cp_env, *e2, id_gen, extenv);

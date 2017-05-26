@@ -6,7 +6,7 @@ named!(simple_exp_no_index<Syntax>, alt_complete!(
     ws!(do_parse!(tag!("(") >> res: exp >> tag!(")") >> (res))) |
     ws!(do_parse!(tag!("(") >> tag!(")") >> (Syntax::Unit))) |
     ws!(do_parse!(b: bool_lit >> (Syntax::Bool(b)))) |
-    ws!(do_parse!(f: float_lit >> (Syntax::Float(f.into())))) |
+    ws!(do_parse!(f: float_lit >> (Syntax::Float(OrderedFloat::from(f))))) |
     ws!(do_parse!(i: int_lit >> (Syntax::Int(i)))) |
     ws!(do_parse!(id: ident >> (Syntax::Var(id))))
 ));
@@ -297,13 +297,15 @@ fn test_simple_exp() {
 
 #[test]
 fn test_let() {
-    use nom::IResult;
     use self::Syntax::{Int, Let};
     let result = exp(b"let x = 0 in 1").unwrap();
     assert_eq!(result.0, &[0u8; 0]);
     match result.1 {
-        Let((id, _), e1, e2) =>
-            assert_eq!(*e1, Int(0)),
+        Let((id, _), e1, e2) => {
+            assert_eq!(id, "x");
+            assert_eq!(*e1, Int(0));
+            assert_eq!(*e2, Int(1));
+        }
         _ => panic!(),
     }
 }
