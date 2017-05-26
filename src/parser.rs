@@ -278,69 +278,77 @@ Operator precedence:
 %left DOT
 */
 
-#[test]
-fn test_simple_exp() {
-    use nom::IResult;
-    use self::Syntax::*;
-    assert_eq!(exp(b" ( c)"), IResult::Done(&[0u8; 0][..],
-                                            Var("c".to_string())));
-    assert_eq!(exp(b"() "), IResult::Done(&[0u8; 0][..], Unit));
-    assert_eq!(exp(b"100"), IResult::Done(&[0u8; 0][..], Int(100)));
-    assert_eq!(exp(b"10.0"), IResult::Done(&[0u8; 0][..], Float(10.0.into())));
-    assert_eq!(exp(b"1256.25"),
-               IResult::Done(&[0u8; 0][..], Float(1256.25.into())));
-    assert_eq!(exp(b"a.(b)"),
-               IResult::Done(&[0u8; 0][..],
-                             Get(Box::new(Var("a".to_string())),
-                                 Box::new(Var("b".to_string())))));
-}
-
-#[test]
-fn test_let() {
-    use self::Syntax::{Int, Let};
-    let result = exp(b"let x = 0 in 1").unwrap();
-    assert_eq!(result.0, &[0u8; 0]);
-    match result.1 {
-        Let((id, _), e1, e2) => {
-            assert_eq!(id, "x");
-            assert_eq!(*e1, Int(0));
-            assert_eq!(*e2, Int(1));
-        }
-        _ => panic!(),
+#[cfg(test)]
+mod tests {
+    use parser::exp;
+    use ordered_float::OrderedFloat;
+    #[test]
+    fn test_simple_exp() {
+        use nom::IResult;
+        use syntax::Syntax::*;
+        assert_eq!(exp(b" ( c)"), IResult::Done(&[0u8; 0][..],
+                                                Var("c".to_string())));
+        assert_eq!(exp(b"() "), IResult::Done(&[0u8; 0][..], Unit));
+        assert_eq!(exp(b"100"), IResult::Done(&[0u8; 0][..], Int(100)));
+        assert_eq!(exp(b"10.0"), IResult::Done(
+            &[0u8; 0][..], Float(OrderedFloat::from(10.0))));
+        assert_eq!(exp(b"1256.25"),
+                   IResult::Done(&[0u8; 0][..],
+                                 Float(OrderedFloat::from(1256.25))));
+        assert_eq!(exp(b"a.(b)"),
+                   IResult::Done(&[0u8; 0][..],
+                                 Get(Box::new(Var("a".to_string())),
+                                     Box::new(Var("b".to_string())))));
     }
-}
 
-#[test]
-fn test_if() {
-    use nom::IResult;
-    use self::Syntax::{App, Int, If, Var};
-    assert_eq!(exp(b"if f 3 then 4 else 0"),
-               IResult::Done(&[0u8; 0][..],
-                             If(
-                                 Box::new(App(Box::new(Var("f".to_string())),
-                                              vec![Int(3)].into_boxed_slice())),
-                                 Box::new(Int(4)),
-                                 Box::new(Int(0)))));
-}
-
-#[test]
-fn test_exp_not() {
-    use nom::IResult;
-    use self::Syntax::{Bool, Not};
-    assert_eq!(exp(b"!!true"),
-               IResult::Done(&[0u8; 0][..],
-                             Not(
-                                 Box::new(Not(
-                                     Box::new(Bool(true)))))));
-}
-
-#[test]
-fn test_app() {
-    use nom::IResult;
-    use self::Syntax::{App, Int, Var};
-    assert_eq!(exp(b"func 0 1"),
-               IResult::Done(&[0u8; 0][..],
-                             App(
-                                 Box::new(Var("func".to_string())),
-                                 vec![Int(0), Int(1)].into_boxed_slice())));
+    #[test]
+    fn test_let() {
+        use syntax::Syntax::{Int, Let};
+        let result = exp(b"let x = 0 in 1").unwrap();
+        assert_eq!(result.0, &[0u8; 0]);
+        match result.1 {
+            Let((id, _), e1, e2) => {
+                assert_eq!(id, "x");
+                assert_eq!(*e1, Int(0));
+                assert_eq!(*e2, Int(1));
+            }
+            _ => panic!(),
+        }
+    }
+    
+    #[test]
+    fn test_if() {
+        use nom::IResult;
+        use syntax::Syntax::{App, Int, If, Var};
+        assert_eq!(exp(b"if f 3 then 4 else 0"),
+                   IResult::Done(
+                       &[0u8; 0][..],
+                       If(
+                           Box::new(App(Box::new(Var("f".to_string())),
+                                        vec![Int(3)].into_boxed_slice())),
+                           Box::new(Int(4)),
+                           Box::new(Int(0)))));
+    }
+    
+    #[test]
+    fn test_exp_not() {
+        use nom::IResult;
+        use syntax::Syntax::{Bool, Not};
+        assert_eq!(exp(b"!!true"),
+                   IResult::Done(&[0u8; 0][..],
+                                 Not(
+                                     Box::new(Not(
+                                         Box::new(Bool(true)))))));
+    }
+    
+    #[test]
+    fn test_app() {
+        use nom::IResult;
+        use syntax::Syntax::{App, Int, Var};
+        assert_eq!(exp(b"func 0 1"),
+                   IResult::Done(&[0u8; 0][..],
+                                 App(
+                                     Box::new(Var("func".to_string())),
+                                     vec![Int(0), Int(1)].into_boxed_slice())));
+    }
 }
