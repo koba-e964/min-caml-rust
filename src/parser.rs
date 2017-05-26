@@ -65,7 +65,31 @@ stub_rule!(exp_assign, exp_comma);
 stub_rule!(exp_comma, exp_comparative);
 stub_rule!(exp_comparative, exp_additive);
 stub_rule!(exp_additive, exp_multiplicative);
-stub_rule!(exp_multiplicative, exp_unary_minus);
+named!(exp_multiplicative<Syntax>,
+       ws!(do_parse!(
+           init: exp_unary_minus >>
+               res: fold_many0!(
+                   ws!(pair!(mult_op, exp_unary_minus)),
+                   init,
+                   |acc, (op, arg)| {
+                       match op {
+                           Err(op) =>
+                               Syntax::FloatBin(op,
+                                                Box::new(acc), Box::new(arg)),
+                           Ok(op) =>
+                               Syntax::IntBin(op,
+                                              Box::new(acc), Box::new(arg)),
+                       }
+                   }
+               ) >>
+               (res)
+       ))
+);
+named!(mult_op<Result<IntBin, FloatBin>>, alt_complete!(
+    do_parse!(tag!("*.") >> (Err(FloatBin::FMul))) |
+    do_parse!(tag!("/.") >> (Err(FloatBin::FDiv)))
+));
+
 stub_rule!(exp_unary_minus, exp_app);
 
 
@@ -299,6 +323,13 @@ mod tests {
                    IResult::Done(&[0u8; 0][..],
                                  Get(Box::new(Var("a".to_string())),
                                      Box::new(Var("b".to_string())))));
+        assert_eq!(exp(b"a.(b).(c)"),
+                   IResult::Done(&[0u8; 0][..],
+                                 Get(
+                                     Box::new(
+                                         Get(Box::new(Var("a".to_string())),
+                                             Box::new(Var("b".to_string())))),
+                                     Box::new(Var("c".to_string())))));
     }
 
     #[test]
@@ -329,7 +360,30 @@ mod tests {
                            Box::new(Int(4)),
                            Box::new(Int(0)))));
     }
-    
+
+    #[test]
+    fn test_mult() {
+        use nom::IResult;
+        use syntax::Syntax;
+        use syntax::Syntax::Var;
+        use syntax::FloatBin;
+        assert_eq!(exp(b"x *. y"),
+                   IResult::Done(&[0u8; 0][..],
+                                 Syntax::FloatBin(
+                                     FloatBin::FMul,
+                                     Box::new(Var("x".to_string())),
+                                     Box::new(Var("y".to_string())))));
+        assert_eq!(exp(b"x /. y *. z"),
+                   IResult::Done(&[0u8; 0][..],
+                                 Syntax::FloatBin(
+                                     FloatBin::FMul,
+                                     Box::new(Syntax::FloatBin(
+                                         FloatBin::FDiv,
+                                         Box::new(Var("x".to_string())),
+                                         Box::new(Var("y".to_string())))),
+                                     Box::new(Var("z".to_string())))));
+    }
+
     #[test]
     fn test_exp_not() {
         use nom::IResult;
