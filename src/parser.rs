@@ -63,27 +63,68 @@ macro_rules! stub_rule {
 
 stub_rule!(exp_assign, exp_comma);
 stub_rule!(exp_comma, exp_comparative);
-stub_rule!(exp_comparative, exp_additive);
-stub_rule!(exp_additive, exp_multiplicative);
-named!(exp_multiplicative<Syntax>,
-       ws!(do_parse!(
-           init: exp_unary_minus >>
-               res: fold_many0!(
-                   ws!(pair!(mult_op, exp_unary_minus)),
-                   init,
-                   |acc, (op, arg)| {
-                       match op {
-                           Err(op) =>
-                               Syntax::FloatBin(op,
-                                                Box::new(acc), Box::new(arg)),
-                           Ok(op) =>
-                               Syntax::IntBin(op,
-                                              Box::new(acc), Box::new(arg)),
-                       }
-                   }
-               ) >>
-               (res)
-       ))
+macro_rules! exp_binary_operator {
+    ($rule:ident, $next_rule: ident, $op: ident, $folder: expr) => {
+        named!($rule<Syntax>,
+               ws!(do_parse!(
+                   init: $next_rule >>
+                       res: fold_many0!(
+                           ws!(pair!($op, $next_rule)),
+                           init,
+                           $folder
+                       ) >>
+                       (res)
+               ))
+        );
+    }
+}
+exp_binary_operator!(
+    exp_comparative, exp_additive,
+    comp_op,
+    |acc, ((op, negated, flipped), arg)| {
+        let ast = if flipped {
+            Syntax::CompBin(op, Box::new(arg), Box::new(acc))
+        } else {
+            Syntax::CompBin(op, Box::new(acc), Box::new(arg))
+        };
+        if negated {
+            Syntax::Not(Box::new(ast))
+        } else {
+            ast
+        }
+    }
+);
+// (operator, negated, arguments flipped)
+named!(comp_op<(CompBin, bool, bool)>, alt_complete!(
+    do_parse!(tag!("<=") >> ((CompBin::LE, false, false))) |
+    do_parse!(tag!(">=") >> ((CompBin::LE, false, true))) |
+    do_parse!(tag!("<>") >> ((CompBin::Eq, true, false))) |
+    do_parse!(tag!("==") >> ((CompBin::Eq, false, false))) |
+    do_parse!(tag!("<") >> ((CompBin::LE, true, true))) |
+    do_parse!(tag!(">") >> ((CompBin::LE, true, false)))
+));
+exp_binary_operator!(
+    exp_additive, exp_multiplicative,
+    add_op,
+    |acc, (op, arg)| match op {
+        Err(op) => Syntax::FloatBin(op, Box::new(acc), Box::new(arg)),
+        Ok(op) => Syntax::IntBin(op, Box::new(acc), Box::new(arg)),
+    }
+);
+named!(add_op<Result<IntBin, FloatBin>>, alt_complete!(
+    do_parse!(tag!("+.") >> (Err(FloatBin::FAdd))) |
+    do_parse!(tag!("-.") >> (Err(FloatBin::FSub))) |
+    do_parse!(tag!("+") >> (Ok(IntBin::Add))) |
+    do_parse!(tag!("-") >> (Ok(IntBin::Sub)))
+));
+
+exp_binary_operator!(
+    exp_multiplicative, exp_unary_minus,
+    mult_op,
+    |acc, (op, arg)| match op {
+        Err(op) => Syntax::FloatBin(op, Box::new(acc), Box::new(arg)),
+        Ok(op) => Syntax::IntBin(op, Box::new(acc), Box::new(arg)),
+    }
 );
 named!(mult_op<Result<IntBin, FloatBin>>, alt_complete!(
     do_parse!(tag!("*.") >> (Err(FloatBin::FMul))) |
@@ -362,6 +403,57 @@ mod tests {
     }
 
     #[test]
+    fn test_comp() {
+        use nom::IResult;
+        use syntax::{Syntax, IntBin, CompBin};
+        use syntax::Syntax::Int;
+        assert_eq!(exp(b"1 < 2 + 3"),
+                   IResult::Done(&[0u8; 0][..],
+                                 Syntax::Not(
+                                     Box::new(Syntax::CompBin(
+                                         CompBin::LE,
+                                         Box::new(Syntax::IntBin(
+                                             IntBin::Add,
+                                             Box::new(Int(2)),
+                                             Box::new(Int(3)))),
+                                         Box::new(Int(1)))))));
+
+        assert_eq!(exp(b"4 <= 3"),
+                   IResult::Done(&[0u8; 0][..],
+                                 Syntax::CompBin(
+                                     CompBin::LE,
+                                     Box::new(Int(4)),
+                                     Box::new(Int(3)))));
+        assert_eq!(exp(b"4 >= 3"),
+                   IResult::Done(&[0u8; 0][..],
+                                 Syntax::CompBin(
+                                     CompBin::LE,
+                                     Box::new(Int(3)),
+                                     Box::new(Int(4)))));
+        assert_eq!(exp(b"4 > 3"),
+                   IResult::Done(&[0u8; 0][..],
+                                 Syntax::Not(Box::new(
+                                     Syntax::CompBin(
+                                         CompBin::LE,
+                                         Box::new(Int(4)),
+                                         Box::new(Int(3)))))));
+        assert_eq!(exp(b"4 == 3"),
+                   IResult::Done(&[0u8; 0][..],
+                                 Syntax::CompBin(
+                                     CompBin::Eq,
+                                     Box::new(Int(4)),
+                                     Box::new(Int(3)))));
+        assert_eq!(exp(b"4 <> 3"),
+                   IResult::Done(&[0u8; 0][..],
+                                 Syntax::Not(Box::new(
+                                     Syntax::CompBin(
+                                         CompBin::Eq,
+                                         Box::new(Int(4)),
+                                         Box::new(Int(3)))))));
+    }
+
+
+    #[test]
     fn test_mult() {
         use nom::IResult;
         use syntax::Syntax;
@@ -382,6 +474,32 @@ mod tests {
                                          Box::new(Var("x".to_string())),
                                          Box::new(Var("y".to_string())))),
                                      Box::new(Var("z".to_string())))));
+    }
+
+    #[test]
+    fn test_multadd() {
+        use nom::IResult;
+        use syntax::Syntax;
+        use syntax::Syntax::Var;
+        use syntax::FloatBin;
+        assert_eq!(exp(b"x /. y +. z"),
+                   IResult::Done(&[0u8; 0][..],
+                                 Syntax::FloatBin(
+                                     FloatBin::FAdd,
+                                     Box::new(Syntax::FloatBin(
+                                         FloatBin::FDiv,
+                                         Box::new(Var("x".to_string())),
+                                         Box::new(Var("y".to_string())))),
+                                     Box::new(Var("z".to_string())))));
+        assert_eq!(exp(b"a -. b /. c"),
+                   IResult::Done(&[0u8; 0][..],
+                                 Syntax::FloatBin(
+                                     FloatBin::FSub,
+                                     Box::new(Var("a".to_string())),
+                                     Box::new(Syntax::FloatBin(
+                                         FloatBin::FDiv,
+                                         Box::new(Var("b".to_string())),
+                                         Box::new(Var("c".to_string())))))));
     }
 
     #[test]
