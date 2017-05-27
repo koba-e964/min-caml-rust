@@ -73,7 +73,20 @@ macro_rules! stub_rule {
 }
 
 stub_rule!(exp_assign, exp_comma);
-stub_rule!(exp_comma, exp_comparative);
+
+named!(exp_comma<Syntax>, alt_complete!(
+    ws!(do_parse!(
+        init: exp_comparative >>
+            res: fold_many1!(
+                ws!(preceded!(tag!(","), exp_comparative)),
+                vec![init],
+                |mut acc: Vec<Syntax>, x| { acc.push(x); acc }
+            ) >>
+            (Syntax::Tuple(res.into_boxed_slice()))
+    )) |
+    ws!(exp_comparative)
+));
+
 macro_rules! exp_binary_operator {
     ($rule:ident, $next_rule: ident, $op: ident, $folder: expr) => {
         named!($rule<Syntax>,
@@ -454,6 +467,34 @@ mod tests {
                                         vec![Int(3)].into_boxed_slice())),
                            Box::new(Int(4)),
                            Box::new(Int(0)))));
+    }
+
+    #[test]
+    fn test_comma() {
+        use nom::IResult;
+        use syntax::Syntax::{Int, Tuple, Var};
+        use syntax::{Syntax, IntBin};
+        let x = || Var("x".to_string());
+        let y = || Var("y".to_string());
+        let z = || Var("z".to_string());
+        let w = || Var("w".to_string());
+        assert_eq!(exp(b"x, y, (z, w)"),
+                   IResult::Done(
+                       &[0u8; 0][..],
+                       Tuple(
+                           vec![x(), y(),
+                                Tuple(
+                                    vec![z(), w()].into_boxed_slice())
+                           ].into_boxed_slice())));
+        assert_eq!(exp(b"x, 1 + 3"),
+                   IResult::Done(
+                       &[0u8; 0][..],
+                       Tuple(
+                           vec![x(),
+                                Syntax::IntBin(IntBin::Add,
+                                               Box::new(Int(1)),
+                                               Box::new(Int(3)))
+                           ].into_boxed_slice())));
     }
 
     #[test]
