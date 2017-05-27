@@ -1,5 +1,7 @@
+extern crate std;
 use nom::{digit};
 use syntax::*;
+use id::IdGen;
 use ordered_float::OrderedFloat;
 
 named!(simple_exp_no_index<Syntax>, alt_complete!(
@@ -35,10 +37,38 @@ named!(exp_let<Syntax>, alt_complete!(
             e1: exp >>
             tag!("in") >>
             e2: exp_let >>
-            (Syntax::Let((id, Type::Unit /* TODO should be uniquely assigned to a var */), Box::new(e1), Box::new(e2)))
+            (Syntax::Let((id, Type::Var(0) /* stub type */), Box::new(e1), Box::new(e2)))
+    )) |
+    ws!(do_parse!(
+        tag!("let") >>
+            tag!("rec") >>
+            f: fundef >>
+            tag!("in") >>
+            e: exp_let >>
+            (Syntax::LetRec(f, Box::new(e)))
     )) |
     ws!(exp_semicolon)
-)); // 1/3 done (missing: letrec, lettuple)
+)); // 2/3 done (missing: lettuple)
+
+
+named!(fundef<Fundef>,
+       ws!(do_parse!(
+           funname: ident >>
+               args: formal_args >>
+               tag!("=") >>
+               e: exp >>
+               (Fundef {name: (funname, Type::Var(0) /* stub type */),
+                        args: args.into_boxed_slice(),
+                        body: Box::new(e)})
+       ))
+);
+
+named!(formal_args<Vec<(String, Type)>>,
+       ws!(do_parse!(
+           x: many1!(ident) >>
+               (x.into_iter().map(|x| (x, Type::Var(0) /* stub type */)).collect())
+       ))
+);
 
 named!(exp_semicolon<Syntax>, alt_complete!(
     ws!(do_parse!(
@@ -216,7 +246,8 @@ fn is_not_ident_u8(x: u8) -> bool {
 }
 
 fn is_ident(x: &[u8]) -> bool {
-    let keywords = vec![&b"let"[..], &b"in"[..], &b"true"[..], &b"false"[..], &b"if"[..], &b"then"[..], &b"else"[..]];
+    let keywords = vec![&b"let"[..], &b"rec"[..], &b"in"[..], &b"true"[..],
+                        &b"false"[..], &b"if"[..], &b"then"[..], &b"else"[..]];
     if x.len() == 0 || keywords.contains(&x) {
         return false;
     }
@@ -253,6 +284,123 @@ fn convert_to_f64(x: &[u8]) -> f64 {
     }
     cur
 }
+
+/// Assigns unique type variables to stub type variables
+pub fn uniqify(expr: Syntax, id_gen: &mut IdGen) -> Syntax {
+    match expr {
+        Syntax::Let((x, t), e1, e2) => {
+            let t = if let Type::Var(_) = t {
+                id_gen.gen_type()
+            } else {
+                t
+            };
+            let e1 = uniqify(*e1, id_gen);
+            let e2 = uniqify(*e2, id_gen);
+            Syntax::Let((x, t), Box::new(e1), Box::new(e2))
+        },
+        Syntax::LetRec(Fundef {name: (name, t), mut args, body: e1},
+                       e2) => {
+            let t = if let Type::Var(_) = t {
+                id_gen.gen_type()
+            } else {
+                t
+            };
+            for i in 0 .. args.len() {
+                let mut dummy = Type::Unit;
+                std::mem::swap(&mut args[i].1, &mut dummy);
+                let t = if let Type::Var(_) = dummy {
+                    id_gen.gen_type()
+                } else {
+                    dummy
+                };
+                args[i].1 = t;
+            }
+            let e1 = Box::new(uniqify(*e1, id_gen));
+            let e2 = Box::new(uniqify(*e2, id_gen));
+            Syntax::LetRec(Fundef {name: (name, t), args: args,
+                                   body: e1},
+                           e2)
+        },
+        Syntax::LetTuple(mut pat, e1, e2) => {
+            for i in 0 .. pat.len() {
+                if let Type::Var(_) = pat[i].1 {
+                    pat[i].1 = id_gen.gen_type();
+                }
+            }
+            let e1 = Box::new(uniqify(*e1, id_gen));
+            let e2 = Box::new(uniqify(*e2, id_gen));
+            Syntax::LetTuple(pat, e1, e2)
+        }
+        Syntax::Not(e1) => {
+            let e1 = Box::new(uniqify(*e1, id_gen));
+            Syntax::Not(e1)
+        },
+        Syntax::Neg(e1) => {
+            let e1 = Box::new(uniqify(*e1, id_gen));
+            Syntax::Neg(e1)
+        },
+        Syntax::IntBin(op, e1, e2) => {
+            let e1 = Box::new(uniqify(*e1, id_gen));
+            let e2 = Box::new(uniqify(*e2, id_gen));
+            Syntax::IntBin(op, e1, e2)
+        },
+        Syntax::FNeg(e1) => {
+            let e1 = Box::new(uniqify(*e1, id_gen));
+            Syntax::FNeg(e1)
+        },
+        Syntax::FloatBin(op, e1, e2) => {
+            let e1 = Box::new(uniqify(*e1, id_gen));
+            let e2 = Box::new(uniqify(*e2, id_gen));
+            Syntax::FloatBin(op, e1, e2)
+        },
+        Syntax::CompBin(op, e1, e2) => {
+            let e1 = Box::new(uniqify(*e1, id_gen));
+            let e2 = Box::new(uniqify(*e2, id_gen));
+            Syntax::CompBin(op, e1, e2)
+        },
+        Syntax::If(e1, e2, e3) => {
+            let e1 = Box::new(uniqify(*e1, id_gen));
+            let e2 = Box::new(uniqify(*e2, id_gen));
+            let e3 = Box::new(uniqify(*e3, id_gen));
+            Syntax::If(e1, e2, e3)
+        },
+        Syntax::App(e1, mut e2s) => {
+            let e1 = Box::new(uniqify(*e1, id_gen));
+            uniqify_box(&mut e2s, id_gen);
+            Syntax::App(e1, e2s)
+        },
+        Syntax::Tuple(mut es) => {
+            uniqify_box(&mut es, id_gen);
+            Syntax::Tuple(es)
+        },
+        Syntax::Array(e1, e2) => {
+            let e1 = Box::new(uniqify(*e1, id_gen));
+            let e2 = Box::new(uniqify(*e2, id_gen));
+            Syntax::Array(e1, e2)
+        },
+        Syntax::Get(e1, e2) => {
+            let e1 = Box::new(uniqify(*e1, id_gen));
+            let e2 = Box::new(uniqify(*e2, id_gen));
+            Syntax::Get(e1, e2)
+        },
+        Syntax::Put(e1, e2, e3) => {
+            let e1 = Box::new(uniqify(*e1, id_gen));
+            let e2 = Box::new(uniqify(*e2, id_gen));
+            let e3 = Box::new(uniqify(*e3, id_gen));
+            Syntax::Put(e1, e2, e3)
+        },
+        x => x, // No Syntax inside
+    }
+}
+
+fn uniqify_box(es: &mut Box<[Syntax]>, id_gen: &mut IdGen) {
+    for i in 0 .. es.len() {
+        let mut dummy = Syntax::Unit;
+        std::mem::swap(&mut dummy, &mut es[i]);
+        es[i] = uniqify(dummy, id_gen);
+    }
+}
+
 
 /*
 simple_exp: /* (* 括弧をつけなくても関数の引数になれる式 (caml2html: parser_simple) *) */
@@ -426,6 +574,23 @@ mod tests {
                 assert_eq!(id, "x");
                 assert_eq!(*e1, Int(0));
                 assert_eq!(*e2, Int(1));
+            }
+            _ => panic!(),
+        }
+    }
+
+    #[test]
+    fn test_letrec() {
+        use syntax::Fundef;
+        use syntax::Syntax::{App, Int, LetRec, Var};
+        let result = exp(b"let rec f x = x in f 1").unwrap();
+        assert_eq!(result.0, &[0u8; 0]);
+        match result.1 {
+            LetRec(Fundef { name: (id, _), args: _, body: e1 }, e2) => {
+                assert_eq!(id, "f");
+                assert_eq!(*e1, Var("x".to_string()));
+                assert_eq!(*e2, App(Box::new(Var("f".to_string())),
+                                    vec![Int(1)].into_boxed_slice()));
             }
             _ => panic!(),
         }

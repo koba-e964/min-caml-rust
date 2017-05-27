@@ -1,27 +1,31 @@
 extern crate min_caml_rust;
 extern crate nom;
 
-use min_caml_rust::{id, parser, k_normal};
+use min_caml_rust::{id, parser, k_normal, typing};
 use min_caml_rust::syntax::Type;
 use nom::IResult;
 use std::collections::HashMap;
 
 fn main() {
     println!("Mitou Min-Caml Compiler (C) Eijiro Sumii\n (Port to Rust)");
-    let program = b"rand.(3)";
-    let extenv = vec![("rand".to_string(),
-                       Type::Array(Box::new(Type::Int)))].into_iter().collect();
+    let program = b"(let rec f x = () in f 1)";
+    let extenv = vec![].into_iter().collect();
     run(program, extenv);
 }
 
 fn run(program: &[u8], extenv: HashMap<String, Type>) {
+    let mut id_gen = id::IdGen::new();
     let expr = match parser::exp(program) {
         IResult::Done(_, expr) => expr,
         IResult::Incomplete(_) => panic!("incomplete"),
         IResult::Error(alt) => panic!(format!("error: {:?}", alt)),
     };
+    let expr = parser::uniqify(expr, &mut id_gen);
     println!("expr = {:?}", expr);
-    let mut id_gen = id::IdGen::new();
+    let (expr, _extenv) = match typing::f(&expr, &mut id_gen) {
+        Ok(x) => x,
+        Err(msg) => panic!(format!("error typecheck: {}", msg)),
+    };
     let k_normal = k_normal::f(expr, &mut id_gen, &extenv);
     println!("{:?}", k_normal);
 }
