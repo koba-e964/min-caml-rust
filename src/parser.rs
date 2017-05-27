@@ -1,4 +1,4 @@
-use nom::{alpha, digit};
+use nom::{digit};
 use syntax::*;
 use ordered_float::OrderedFloat;
 
@@ -165,20 +165,24 @@ named!(float_lit<f64>, ws!(do_parse!(
                           
 
 named!(ident<String>, ws!(do_parse!(
-    peek!(not!(reserved)) >>
-    s: alpha >>
+    s: verify!(take_till!(is_not_ident_u8), is_ident) >>
         (String::from_utf8(s.to_vec()).unwrap())
 )));
 
-named!(reserved, alt_complete!(
-    tag!("let") |
-    tag!("in") |
-    tag!("true") |
-    tag!("false") |
-    tag!("if") |
-    tag!("then") |
-    tag!("else")
-));
+fn is_not_ident_u8(x: u8) -> bool {
+    !((b'0' <= x && x <= b'9') ||
+      (b'A' <= x && x <= b'Z') ||
+      (b'a' <= x && x <= b'z') ||
+      x == b'_')
+}
+
+fn is_ident(x: &[u8]) -> bool {
+    let keywords = vec![&b"let"[..], &b"in"[..], &b"true"[..], &b"false"[..], &b"if"[..], &b"then"[..], &b"else"[..]];
+    if x.len() == 0 || keywords.contains(&x) {
+        return false;
+    }
+    !(b'0' <= x[0] && x[0] <= b'9')
+}
 
 
 fn convert(x: &[u8], radix: i64) -> i64 {
