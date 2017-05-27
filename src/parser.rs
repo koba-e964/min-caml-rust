@@ -142,7 +142,22 @@ named!(mult_op<Result<IntBin, FloatBin>>, alt_complete!(
     do_parse!(tag!("/.") >> (Err(FloatBin::FDiv)))
 ));
 
-stub_rule!(exp_unary_minus, exp_app);
+named!(exp_unary_minus<Syntax>, alt_complete!(
+    ws!(do_parse!(
+        tag!("-.") >>
+            e: exp_unary_minus >>
+            (Syntax::FNeg(Box::new(e)))
+    )) |
+    ws!(do_parse!(
+        tag!("-") >>
+            e: exp_unary_minus >>
+            (match &e {
+                &Syntax::Float(_) => Syntax::FNeg(Box::new(e)),
+                _ => Syntax::Neg(Box::new(e))
+            })
+    )) |
+    ws!(exp_app)
+));
 
 
 named!(exp_app<Syntax>, alt_complete!(
@@ -539,6 +554,30 @@ mod tests {
                                          FloatBin::FDiv,
                                          Box::new(Var("b".to_string())),
                                          Box::new(Var("c".to_string())))))));
+    }
+
+    #[test]
+    fn test_unary_minus() {
+        use nom::IResult;
+        use syntax::Syntax::{Int, Float, Neg, FNeg, Var};
+        assert_eq!(exp(b"-2"),
+                   IResult::Done(&[0u8; 0][..],
+                                 Neg(
+                                     Box::new(Int(2)))));
+        assert_eq!(exp(b"--2"),
+                   IResult::Done(&[0u8; 0][..],
+                                 Neg(
+                                     Box::new(Neg(
+                                         Box::new(Int(2)))))));
+        assert_eq!(exp(b"-.x"),
+                   IResult::Done(&[0u8; 0][..],
+                                 FNeg(
+                                     Box::new(Var("x".to_string())))));
+        // - followed by float literal is ok.
+        assert_eq!(exp(b"-2.0"),
+                   IResult::Done(&[0u8; 0][..],
+                                 FNeg(
+                                     Box::new(Float(2.0.into())))));
     }
 
     #[test]
