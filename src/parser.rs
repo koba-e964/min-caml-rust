@@ -37,8 +37,19 @@ named!(exp_let<Syntax>, alt_complete!(
             e2: exp_let >>
             (Syntax::Let((id, Type::Unit /* TODO should be uniquely assigned to a var */), Box::new(e1), Box::new(e2)))
     )) |
-    ws!(exp_if)
+    ws!(exp_semicolon)
 )); // 1/3 done (missing: letrec, lettuple)
+
+named!(exp_semicolon<Syntax>, alt_complete!(
+    ws!(do_parse!(
+        e1: exp_if >>
+            tag!(";") >>
+            e2: exp_semicolon >>
+            (Syntax::Let(("_dummy".to_string(), Type::Unit),
+                         Box::new(e1), Box::new(e2)))
+    )) |
+    ws!(exp_if)
+));
 
 named!(exp_if<Syntax>, alt_complete!(
     ws!(do_parse!(
@@ -391,7 +402,31 @@ mod tests {
             _ => panic!(),
         }
     }
-    
+
+    #[test]
+    fn test_semicolon() {
+        use nom::IResult;
+        use syntax::Syntax::{App, Int, Let, Unit, Var};
+        use syntax::Type;
+        let result = exp(b"print_int 0; (); print_int 1");
+        let print_int = || Box::new(Var("print_int".to_string()));
+        let dummy = || ("_dummy".to_string(), Type::Unit);
+        // semicolon is right-associative
+        assert_eq!(result,
+                   IResult::Done(
+                       &[0u8; 0][..],
+                       Let(
+                           dummy(),
+                           Box::new(App(print_int(),
+                                        vec![Int(0)].into_boxed_slice())),
+                           Box::new(Let(
+                               dummy(),
+                               Box::new(Unit),
+                               Box::new(App(
+                                   print_int(),
+                                   vec![Int(1)].into_boxed_slice())))))));
+    }
+
     #[test]
     fn test_if() {
         use nom::IResult;
