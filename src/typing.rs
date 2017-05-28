@@ -30,7 +30,7 @@ fn deref_typ(e: &Type, tyenv: &HashMap<usize, Type>) -> Type {
         Type::Array(ref t) => Type::Array(Box::new(deref_typ(t, tyenv))),
         Type::Var(ref n) => {
             if let Some(t) = tyenv.get(n) {
-                t.clone()
+                deref_typ(t, tyenv)
             } else {
                 println!("uninstantiated type variable {} detected; assuming int@.", n);
                 Type::Int
