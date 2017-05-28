@@ -40,7 +40,13 @@ lazy_static! {
 
 fn main() {
     println!("Mitou Min-Caml Compiler (C) Eijiro Sumii\n (Port to Rust)");
-    let path = Path::new("test/fib.ml");
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() <= 1 {
+        println!(" usage: ./min-caml-rust [ML FILENAME]");
+        return;
+    }
+    let ref filename = args[1];
+    let path = Path::new(&filename);
     let program = read_from_file(&path).unwrap();
     run(&program);
 }
