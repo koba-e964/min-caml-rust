@@ -590,7 +590,7 @@ mod tests {
                 assert_eq!(id, "f");
                 assert_eq!(*e1, Var("x".to_string()));
                 assert_eq!(*e2, App(Box::new(Var("f".to_string())),
-                                    vec![Int(1)].into_boxed_slice()));
+                                    Box::new([Int(1)])));
             }
             _ => panic!(),
         }
@@ -611,13 +611,13 @@ mod tests {
                        Let(
                            dummy(),
                            Box::new(App(print_int(),
-                                        vec![Int(0)].into_boxed_slice())),
+                                        Box::new([Int(0)]))),
                            Box::new(Let(
                                dummy(),
                                Box::new(Unit),
                                Box::new(App(
                                    print_int(),
-                                   vec![Int(1)].into_boxed_slice())))))));
+                                   Box::new([Int(1)]))))))));
     }
 
     #[test]
@@ -629,7 +629,7 @@ mod tests {
                        &[0u8; 0][..],
                        If(
                            Box::new(App(Box::new(Var("f".to_string())),
-                                        vec![Int(3)].into_boxed_slice())),
+                                        Box::new([Int(3)]))),
                            Box::new(Int(4)),
                            Box::new(Int(0)))));
     }
@@ -647,19 +647,19 @@ mod tests {
                    IResult::Done(
                        &[0u8; 0][..],
                        Tuple(
-                           vec![x(), y(),
+                           Box::new([x(), y(),
                                 Tuple(
-                                    vec![z(), w()].into_boxed_slice())
-                           ].into_boxed_slice())));
+                                    Box::new([z(), w()]))
+                           ]))));
         assert_eq!(exp(b"x, 1 + 3"),
                    IResult::Done(
                        &[0u8; 0][..],
                        Tuple(
-                           vec![x(),
+                           Box::new([x(),
                                 Syntax::IntBin(IntBin::Add,
                                                Box::new(Int(1)),
                                                Box::new(Int(3)))
-                           ].into_boxed_slice())));
+                           ]))));
     }
 
     #[test]
@@ -805,6 +805,6 @@ mod tests {
                    IResult::Done(&[0u8; 0][..],
                                  App(
                                      Box::new(Var("func".to_string())),
-                                     vec![Int(0), Int(1)].into_boxed_slice())));
+                                     Box::new([Int(0), Int(1)]))));
     }
 }

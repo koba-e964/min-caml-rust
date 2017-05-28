@@ -326,7 +326,7 @@ fn g(env: &HashMap<String, Type>, e: Syntax, id_gen: &mut IdGen, extenv: &HashMa
                                                              Type::Float => "create_float_array",
                                                              _ => "create_array",
                                                          }.to_string();
-                                                         (KNormal::ExtFunApp(l, vec![x, y].into_boxed_slice()), Type::Array(Box::new(t2)))
+                                                         (KNormal::ExtFunApp(l, Box::new([x, y])), Type::Array(Box::new(t2)))
                                                      })
                                })
         },
@@ -416,14 +416,14 @@ mod tests {
         let x = || "x".to_string();
         let y = || "y".to_string();
         let z = || "z".to_string();
-        let env = vec![(x(), Type::Fun(vec![Type::Int; 2].into_boxed_slice(),
+        let env = vec![(x(), Type::Fun(Box::new([Type::Int, Type::Int]),
                                        Box::new(Type::Int))),
                        (y(), Type::Int),
                        (z(), Type::Int)].into_iter().collect();
         let expr = Syntax::App(Box::new(Syntax::Var(x())),
-                               vec![Syntax::Var(y()), Syntax::Var(z())].into_boxed_slice());
+                               Box::new([Syntax::Var(y()), Syntax::Var(z())]));
         assert_eq!(g(&env, expr, &mut id_gen, &extenv),
-                   (KNormal::App(x(), vec![y(), z()].into_boxed_slice()),
+                   (KNormal::App(x(), Box::new([y(), z()])),
                     Type::Int))
     }
     #[test]
@@ -435,13 +435,13 @@ mod tests {
         let print_int = || "print_int".to_string();
         let mut extenv = HashMap::new();
         extenv.insert(print_int(),
-                      Type::Fun(vec![Type::Int].into_boxed_slice(),
+                      Type::Fun(Box::new([Type::Int]),
                       Box::new(Type::Unit)));
         let env = vec![(y(), Type::Int)].into_iter().collect();
         let expr = Syntax::App(Box::new(Syntax::Var(print_int())),
-                               vec![Syntax::Var(y())].into_boxed_slice());
+                               Box::new([Syntax::Var(y())]));
         assert_eq!(g(&env, expr, &mut id_gen, &extenv),
-                   (KNormal::ExtFunApp(print_int(), vec![y()].into_boxed_slice()),
+                   (KNormal::ExtFunApp(print_int(), Box::new([y()])),
                     Type::Unit))
     }
     #[test]
@@ -455,16 +455,16 @@ mod tests {
         let d0 = || "d0".to_string(); // Temporary variable of type float
         let env = vec![(x(), Type::Bool),
                        (y(), Type::Int)].into_iter().collect();
-        let expr = Syntax::Tuple(vec![Syntax::Var(x()),
-                                 Syntax::Var(y()),
-                                 Syntax::Float(1.0.into())].into_boxed_slice());
+        let expr = Syntax::Tuple(Box::new([Syntax::Var(x()),
+                                           Syntax::Var(y()),
+                                           Syntax::Float(1.0.into())]));
         assert_eq!(g(&env, expr, &mut id_gen, &extenv),
                    (KNormal::Let((d0(), Type::Float),
                                  Box::new(KNormal::Float(1.0.into())),
                                  Box::new(KNormal::Tuple(
-                                     vec![x(), y(), d0()].into_boxed_slice()))),
-                    Type::Tuple(vec![Type::Bool, Type::Int, Type::Float]
-                                .into_boxed_slice())))
+                                     Box::new([x(), y(), d0()])))),
+                    Type::Tuple(Box::new(
+                        [Type::Bool, Type::Int, Type::Float]))))
     }
     #[test]
     fn test_g_let_tuple() {
@@ -479,20 +479,19 @@ mod tests {
         let f = || "f".to_string();
         let i0 = || "i0".to_string(); // temporary variable of type int
         let t1 = || "t1".to_string(); // temporary variable of type tuple
-        let tuple_ty = Type::Tuple(vec![Type::Bool, Type::Int, Type::Float]
-                                   .into_boxed_slice());
+        let tuple_ty = Type::Tuple(
+            Box::new([Type::Bool, Type::Int, Type::Float]));
         let env = vec![(f(),
-                        Type::Fun(vec![Type::Int].into_boxed_slice(),
+                        Type::Fun(Box::new([Type::Int]),
                                   Box::new(tuple_ty.clone())))]
             .into_iter().collect();
-        let args_list = vec![(x(), Type::Bool),
-                             (y(), Type::Int),
-                             (z(), Type::Float)]
-            .into_boxed_slice();
+        let args_list: Box<[(String, Type)]> = Box::new([(x(), Type::Bool),
+                                  (y(), Type::Int),
+                                  (z(), Type::Float)]);
         let expr = Syntax::LetTuple(
             args_list.clone(),
             Box::new(Syntax::App(Box::new(Syntax::Var(f())),
-                                 vec![Syntax::Int(1)].into_boxed_slice())),
+                                 Box::new([Syntax::Int(1)]))),
             Box::new(Syntax::Var(x())));
         let expected = (KNormal::Let((t1(), tuple_ty),
                                      Box::new(
@@ -501,8 +500,7 @@ mod tests {
                                              Box::new(KNormal::Int(1)),
                                              Box::new(KNormal::App(
                                                  f(),
-                                                 vec![i0()]
-                                                     .into_boxed_slice())))),
+                                                 Box::new([i0()]))))),
                                      Box::new(
                                          KNormal::LetTuple(
                                              args_list,
@@ -527,7 +525,7 @@ mod tests {
                                     Box::new(KNormal::Int(5)),
                                     Box::new(KNormal::ExtFunApp(
                                         "create_array".to_string(),
-                                        vec![x(), i0()].into_boxed_slice())));
+                                        Box::new([x(), i0()]))));
         assert_eq!(g(&env, expr, &mut id_gen, &extenv),
                    (expected,
                     Type::Array(Box::new(Type::Int))))
@@ -546,38 +544,37 @@ mod tests {
         let i0 = || "i0".to_string(); // Temporary variable of type int
         let env = vec![(y(), Type::Int),
                        (z(), Type::Int),
-                       (g_id(), Type::Fun(vec![Type::Int; 2].into_boxed_slice(),
+                       (g_id(), Type::Fun(Box::new([Type::Int, Type::Int]),
                                           Box::new(Type::Int)))]
             .into_iter().collect();
         let body = Syntax::App(
             Box::new(Syntax::Var(g_id())),
-            vec![Syntax::Var(x()), Syntax::App(
+            Box::new([Syntax::Var(x()), Syntax::App(
                 Box::new(Syntax::Var(f())),
-                         vec![Syntax::Var(y())].into_boxed_slice())]
-                .into_boxed_slice());
+                Box::new([Syntax::Var(y())]))]));
         let fundef = Fundef {
-            name: (f(), Type::Fun(vec![Type::Int].into_boxed_slice(),
+            name: (f(), Type::Fun(Box::new([Type::Int]),
                                   Box::new(Type::Int))),
-            args: vec![(x(), Type::Int)].into_boxed_slice(),
+            args: Box::new([(x(), Type::Int)]),
             body: Box::new(body),
             
         };
         let expr = Syntax::LetRec(fundef,
                                   Box::new(Syntax::App(
                                       Box::new(Syntax::Var(f())),
-                                      vec![Syntax::Var(z())].into_boxed_slice()
+                                      Box::new([Syntax::Var(z())])
                                   )));
         let body_trans = KNormal::Let(
             (i0(), Type::Int),
-            Box::new(KNormal::App(f(), vec![y()].into_boxed_slice())),
-            Box::new(KNormal::App(g_id(), vec![x(), i0()].into_boxed_slice())));
+            Box::new(KNormal::App(f(), Box::new([y()]))),
+            Box::new(KNormal::App(g_id(), Box::new([x(), i0()]))));
         let expected = (KNormal::LetRec(
             KFundef {
-                name: (f(), Type::Fun(vec![Type::Int].into_boxed_slice(),
+                name: (f(), Type::Fun(Box::new([Type::Int]),
                                       Box::new(Type::Int))),
-                args: vec![(x(), Type::Int)].into_boxed_slice(),
+                args: Box::new([(x(), Type::Int)]),
                 body: Box::new(body_trans) },
-            Box::new(KNormal::App(f(), vec![z()].into_boxed_slice()))),
+            Box::new(KNormal::App(f(), Box::new([z()])))),
                         Type::Int);
         assert_eq!(g(&env, expr, &mut id_gen, &extenv), expected)
     }

@@ -348,7 +348,7 @@ mod tests{
         use self::Syntax::*;
         let mut id_gen = IdGen::new();
         let syn = App(Box::new(Var("print_int".to_string())),
-                      vec![Int(23)].into_boxed_slice());
+                      Box::new([Int(23)]));
         assert!(f(&syn, &mut id_gen).is_ok()); // top can be :unit.
     }
     #[test]
@@ -358,26 +358,25 @@ mod tests{
         // let rec f x = f x in f 0
         let fundef = LetRec(Fundef {
             name: ("f".to_string(), Type::Var(100)),
-            args: vec![("x".to_string(), Type::Var(101))].into_boxed_slice(),
-            body: Box::new(App(Box::new(Var("f".to_string())), vec![Var("x".to_string())].into_boxed_slice()))
-        }, Box::new(App(Box::new(Var("f".to_string())), vec![Int(0)].into_boxed_slice())));
+            args: Box::new([("x".to_string(), Type::Var(101))]),
+            body: Box::new(App(Box::new(Var("f".to_string())), Box::new([Var("x".to_string())])))
+        }, Box::new(App(Box::new(Var("f".to_string())), Box::new([Int(0)]))));
         assert!(f(&fundef, &mut id_gen).is_ok());
     }
     #[test]
     fn test_typing_tuple() {
         use self::Syntax::*;
         let mut id_gen = IdGen::new();
-        let tuple = Tuple(vec![Int(4), Int(5)]
-                          .into_boxed_slice()); // (4, 5)
+        let tuple = Tuple(Box::new([Int(4), Int(5)]
+                          )); // (4, 5)
         // let (x: int, y: 'a100) = (...) in x
         // 100 is used to avoid collision with generated types
-        let let_ex = LetTuple(vec![("x".to_string(), Type::Int),
-                                   ("y".to_string(), Type::Var(100))]
-                              .into_boxed_slice(),
+        let let_ex = LetTuple(Box::new([("x".to_string(), Type::Int),
+                                        ("y".to_string(), Type::Var(100))]),
                               Box::new(tuple),
                               Box::new(Var("x".to_string())));
         let printer = App(Box::new(Var("print_int".to_string())),
-                      vec![let_ex].into_boxed_slice()); // print_int (...)
+                      Box::new([let_ex])); // print_int (...)
         assert!(f(&printer, &mut id_gen).is_ok());
     }
     #[test]
@@ -387,7 +386,7 @@ mod tests{
         let ary = Array(Box::new(Int(4)), Box::new(Int(5))); // newarray 4 5
         let access = Get(Box::new(ary), Box::new(Int(2))); // (...).(2)
         let printer = App(Box::new(Var("print_int".to_string())),
-                      vec![access].into_boxed_slice());
+                      Box::new([access]));
         assert!(f(&printer, &mut id_gen).is_ok());
     }
     #[test]
