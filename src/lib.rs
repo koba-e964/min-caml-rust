@@ -1,6 +1,7 @@
 #[macro_use]
 extern crate nom;
 extern crate ordered_float;
+extern crate lazy_static;
 
 pub mod syntax;
 pub mod parser;

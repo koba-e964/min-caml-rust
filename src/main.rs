@@ -1,4 +1,6 @@
 extern crate min_caml_rust;
+#[macro_use]
+extern crate lazy_static;
 extern crate nom;
 
 use min_caml_rust::{id, parser, k_normal, typing};
@@ -9,22 +11,8 @@ use std::path::Path;
 use std::fs::File;
 use std::io::Read;
 
-fn main() {
-    println!("Mitou Min-Caml Compiler (C) Eijiro Sumii\n (Port to Rust)");
-    let path = Path::new("test/fib.ml");
-    let program = read_from_file(&path).unwrap();
-    run(&program);
-}
-
-fn read_from_file(path: &Path) -> Result<Vec<u8>, std::io::Error> {
-    let mut file = File::open(path)?;
-    let mut program = Vec::new();
-    file.read_to_end(&mut program)?;
-    Ok(program)
-}
-
-fn run(program: &[u8]) {
-    let extenv: HashMap<String, Type>
+lazy_static! {
+    static ref EXTENV: HashMap<String, Type>
         = vec![("sin".to_string(),
                 Type::Fun(vec![Type::Float].into_boxed_slice(),
                           Box::new(Type::Float))),
@@ -47,6 +35,24 @@ fn run(program: &[u8]) {
                 Type::Fun(vec![Type::Int].into_boxed_slice(),
                           Box::new(Type::Unit))),
         ].into_iter().collect();
+}
+
+
+fn main() {
+    println!("Mitou Min-Caml Compiler (C) Eijiro Sumii\n (Port to Rust)");
+    let path = Path::new("test/fib.ml");
+    let program = read_from_file(&path).unwrap();
+    run(&program);
+}
+
+fn read_from_file(path: &Path) -> Result<Vec<u8>, std::io::Error> {
+    let mut file = File::open(path)?;
+    let mut program = Vec::new();
+    file.read_to_end(&mut program)?;
+    Ok(program)
+}
+
+fn run(program: &[u8]) {
     let mut id_gen = id::IdGen::new();
     let expr = match parser::exp(program) {
         IResult::Done(_, expr) => expr,
@@ -55,6 +61,7 @@ fn run(program: &[u8]) {
     };
     let expr = parser::uniqify(expr, &mut id_gen);
     println!("expr = {:?}", expr);
+    let extenv = EXTENV.clone();
     let (expr, _extenv) = match typing::f(&expr, &mut id_gen) {
         Ok(x) => x,
         Err(msg) => panic!(format!("error typecheck: {}", msg)),

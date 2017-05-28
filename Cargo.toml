@@ -6,6 +6,7 @@ authors = ["koba-e964 <koba_max@kobas-Air.pohe>"]
 [dependencies]
 nom = "^3.0"
 ordered-float = "0.4"
+lazy_static = "^0.2"
 
 [profile.dev]
 debug = false
