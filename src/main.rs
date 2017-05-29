@@ -60,12 +60,17 @@ fn read_from_file(path: &Path) -> Result<Vec<u8>, std::io::Error> {
 
 fn run(program: &[u8]) {
     let mut id_gen = id::IdGen::new();
-    let expr = match parser::exp(program) {
+    let program = match parser::remove_comments(program) {
+        Ok(p) => p,
+        Err(msg) => panic!(msg),
+    };
+    println!("comment-removed: {:?}", String::from_utf8(program.clone()));
+    let expr = match parser::exp(&program) {
         IResult::Done(_, expr) => expr,
         IResult::Incomplete(_) => panic!("incomplete"),
         IResult::Error(alt) => panic!(format!("error: {:?}", alt)),
     };
-    let expr = parser::uniqify(expr, &mut id_gen);
+    let expr = parser::uniquify(expr, &mut id_gen);
     println!("expr = {:?}", expr);
     let extenv = EXTENV.clone();
     let (expr, _extenv) = match typing::f(&expr, &mut id_gen) {

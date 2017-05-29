@@ -286,7 +286,7 @@ fn convert_to_f64(x: &[u8]) -> f64 {
 }
 
 /// Assigns unique type variables to stub type variables
-pub fn uniqify(expr: Syntax, id_gen: &mut IdGen) -> Syntax {
+pub fn uniquify(expr: Syntax, id_gen: &mut IdGen) -> Syntax {
     match expr {
         Syntax::Let((x, t), e1, e2) => {
             let t = if let Type::Var(_) = t {
@@ -294,8 +294,8 @@ pub fn uniqify(expr: Syntax, id_gen: &mut IdGen) -> Syntax {
             } else {
                 t
             };
-            let e1 = uniqify(*e1, id_gen);
-            let e2 = uniqify(*e2, id_gen);
+            let e1 = uniquify(*e1, id_gen);
+            let e2 = uniquify(*e2, id_gen);
             Syntax::Let((x, t), Box::new(e1), Box::new(e2))
         },
         Syntax::LetRec(Fundef {name: (name, t), mut args, body: e1},
@@ -315,8 +315,8 @@ pub fn uniqify(expr: Syntax, id_gen: &mut IdGen) -> Syntax {
                 };
                 args[i].1 = t;
             }
-            let e1 = Box::new(uniqify(*e1, id_gen));
-            let e2 = Box::new(uniqify(*e2, id_gen));
+            let e1 = Box::new(uniquify(*e1, id_gen));
+            let e2 = Box::new(uniquify(*e2, id_gen));
             Syntax::LetRec(Fundef {name: (name, t), args: args,
                                    body: e1},
                            e2)
@@ -327,77 +327,109 @@ pub fn uniqify(expr: Syntax, id_gen: &mut IdGen) -> Syntax {
                     pat[i].1 = id_gen.gen_type();
                 }
             }
-            let e1 = Box::new(uniqify(*e1, id_gen));
-            let e2 = Box::new(uniqify(*e2, id_gen));
+            let e1 = Box::new(uniquify(*e1, id_gen));
+            let e2 = Box::new(uniquify(*e2, id_gen));
             Syntax::LetTuple(pat, e1, e2)
         }
         Syntax::Not(e1) => {
-            let e1 = Box::new(uniqify(*e1, id_gen));
+            let e1 = Box::new(uniquify(*e1, id_gen));
             Syntax::Not(e1)
         },
         Syntax::Neg(e1) => {
-            let e1 = Box::new(uniqify(*e1, id_gen));
+            let e1 = Box::new(uniquify(*e1, id_gen));
             Syntax::Neg(e1)
         },
         Syntax::IntBin(op, e1, e2) => {
-            let e1 = Box::new(uniqify(*e1, id_gen));
-            let e2 = Box::new(uniqify(*e2, id_gen));
+            let e1 = Box::new(uniquify(*e1, id_gen));
+            let e2 = Box::new(uniquify(*e2, id_gen));
             Syntax::IntBin(op, e1, e2)
         },
         Syntax::FNeg(e1) => {
-            let e1 = Box::new(uniqify(*e1, id_gen));
+            let e1 = Box::new(uniquify(*e1, id_gen));
             Syntax::FNeg(e1)
         },
         Syntax::FloatBin(op, e1, e2) => {
-            let e1 = Box::new(uniqify(*e1, id_gen));
-            let e2 = Box::new(uniqify(*e2, id_gen));
+            let e1 = Box::new(uniquify(*e1, id_gen));
+            let e2 = Box::new(uniquify(*e2, id_gen));
             Syntax::FloatBin(op, e1, e2)
         },
         Syntax::CompBin(op, e1, e2) => {
-            let e1 = Box::new(uniqify(*e1, id_gen));
-            let e2 = Box::new(uniqify(*e2, id_gen));
+            let e1 = Box::new(uniquify(*e1, id_gen));
+            let e2 = Box::new(uniquify(*e2, id_gen));
             Syntax::CompBin(op, e1, e2)
         },
         Syntax::If(e1, e2, e3) => {
-            let e1 = Box::new(uniqify(*e1, id_gen));
-            let e2 = Box::new(uniqify(*e2, id_gen));
-            let e3 = Box::new(uniqify(*e3, id_gen));
+            let e1 = Box::new(uniquify(*e1, id_gen));
+            let e2 = Box::new(uniquify(*e2, id_gen));
+            let e3 = Box::new(uniquify(*e3, id_gen));
             Syntax::If(e1, e2, e3)
         },
         Syntax::App(e1, mut e2s) => {
-            let e1 = Box::new(uniqify(*e1, id_gen));
-            uniqify_box(&mut e2s, id_gen);
+            let e1 = Box::new(uniquify(*e1, id_gen));
+            uniquify_box(&mut e2s, id_gen);
             Syntax::App(e1, e2s)
         },
         Syntax::Tuple(mut es) => {
-            uniqify_box(&mut es, id_gen);
+            uniquify_box(&mut es, id_gen);
             Syntax::Tuple(es)
         },
         Syntax::Array(e1, e2) => {
-            let e1 = Box::new(uniqify(*e1, id_gen));
-            let e2 = Box::new(uniqify(*e2, id_gen));
+            let e1 = Box::new(uniquify(*e1, id_gen));
+            let e2 = Box::new(uniquify(*e2, id_gen));
             Syntax::Array(e1, e2)
         },
         Syntax::Get(e1, e2) => {
-            let e1 = Box::new(uniqify(*e1, id_gen));
-            let e2 = Box::new(uniqify(*e2, id_gen));
+            let e1 = Box::new(uniquify(*e1, id_gen));
+            let e2 = Box::new(uniquify(*e2, id_gen));
             Syntax::Get(e1, e2)
         },
         Syntax::Put(e1, e2, e3) => {
-            let e1 = Box::new(uniqify(*e1, id_gen));
-            let e2 = Box::new(uniqify(*e2, id_gen));
-            let e3 = Box::new(uniqify(*e3, id_gen));
+            let e1 = Box::new(uniquify(*e1, id_gen));
+            let e2 = Box::new(uniquify(*e2, id_gen));
+            let e3 = Box::new(uniquify(*e3, id_gen));
             Syntax::Put(e1, e2, e3)
         },
         x => x, // No Syntax inside
     }
 }
 
-fn uniqify_box(es: &mut Box<[Syntax]>, id_gen: &mut IdGen) {
+fn uniquify_box(es: &mut Box<[Syntax]>, id_gen: &mut IdGen) {
     for i in 0 .. es.len() {
         let mut dummy = Syntax::Unit;
         std::mem::swap(&mut dummy, &mut es[i]);
-        es[i] = uniqify(dummy, id_gen);
+        es[i] = uniquify(dummy, id_gen);
+    }
+}
+
+
+pub fn remove_comments(a: &[u8]) -> Result<Vec<u8>, String> {
+    let mut ret = Vec::new();
+    let mut level = 0;
+    let mut pos = 0;
+    let len = a.len();
+    while pos < len {
+        if pos < len - 1 && a[pos] == b'(' && a[pos + 1] == b'*' {
+            pos += 2;
+            level += 1;
+            continue;
+        }
+        if pos < len - 1 && a[pos] == b'*' && a[pos + 1] == b')' {
+            pos += 2;
+            if level <= 0 {
+                return Err("Corresponding \"(*\" not found".to_string());
+            }
+            level -= 1;
+            continue;
+        }
+        if level == 0 {
+            ret.push(a[pos]);
+        }
+        pos += 1;
+    }
+    if level == 0 {
+        Ok(ret)
+    } else {
+        Err("Comments are not balanced".to_string())
     }
 }
 
