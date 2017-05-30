@@ -102,7 +102,19 @@ macro_rules! stub_rule {
     }
 }
 
-stub_rule!(exp_assign, exp_comma);
+named!(exp_assign<Syntax>, alt_complete!(
+    ws!(do_parse!(
+        e1: ident >> // TODO hack
+            tag!(".") >>
+            tag!("(") >>
+            e2: exp >>
+            tag!(")") >>
+            tag!("<-") >>
+            e3: exp_comma >>
+            (Syntax::Put(Box::new(Syntax::Var(e1)), Box::new(e2), Box::new(e3)))
+    )) |
+    ws!(exp_comma)
+));
 
 named!(exp_comma<Syntax>, alt_complete!(
     ws!(do_parse!(
@@ -224,13 +236,22 @@ named!(int_lit<i64>, ws!(do_parse!(
 )));
 
 // TODO supports only digit+ . digit+
-named!(float_lit<f64>, ws!(do_parse!(
-    fstr: recognize!(do_parse!(
-        x: digit >>
-            s: preceded!(char!('.'), digit)
-            >> (())) ) >>
-        (convert_to_f64(fstr))
-)));
+named!(float_lit<f64>, alt_complete!(
+    do_parse!(
+        fstr: recognize!(do_parse!(
+            x: digit >>
+                s: preceded!(char!('.'), digit)
+                >> (())) ) >>
+            (convert_to_f64(fstr))
+    ) |
+    do_parse!(
+        fstr: recognize!(do_parse!(
+            x: digit >>
+                s: char!('.')
+                >> (())) ) >>
+            (convert_to_f64(fstr))
+    )
+));
                           
 
 named!(ident<String>, ws!(do_parse!(
