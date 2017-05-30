@@ -153,7 +153,7 @@ named!(comp_op<(CompBin, bool, bool)>, alt_complete!(
     do_parse!(tag!("<=") >> ((CompBin::LE, false, false))) |
     do_parse!(tag!(">=") >> ((CompBin::LE, false, true))) |
     do_parse!(tag!("<>") >> ((CompBin::Eq, true, false))) |
-    do_parse!(tag!("==") >> ((CompBin::Eq, false, false))) |
+    do_parse!(tag!("=") >> ((CompBin::Eq, false, false))) |
     do_parse!(tag!("<") >> ((CompBin::LE, true, true))) |
     do_parse!(tag!(">") >> ((CompBin::LE, true, false)))
 ));
