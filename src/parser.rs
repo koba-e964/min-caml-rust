@@ -47,9 +47,32 @@ named!(exp_let<Syntax>, alt_complete!(
             e: exp_let >>
             (Syntax::LetRec(f, Box::new(e)))
     )) |
+    ws!(do_parse!(
+        tag!("let") >>
+            tag!("(") >>
+            p: pat >>
+            tag!(")") >>
+            tag!("=") >>
+            e1: exp >>
+            tag!("in") >>
+            e2: exp_let >>
+            (Syntax::LetTuple(p.into_boxed_slice(), Box::new(e1), Box::new(e2)))
+    )) |
     ws!(exp_semicolon)
-)); // 2/3 done (missing: lettuple)
+));
 
+named!(pat<Vec<(String, Type)>>, ws!(do_parse!(
+    init: ident >>
+        res: fold_many1!(
+            ws!(preceded!(tag!(","), ident)),
+            vec![(init, Type::Var(0))],
+            |mut acc: Vec<(String, Type)>, x| {
+                acc.push((x, Type::Var(0)));
+                acc
+            }
+        ) >>
+        (res)
+)));
 
 named!(fundef<Fundef>,
        ws!(do_parse!(
@@ -93,14 +116,6 @@ named!(exp_if<Syntax>, alt_complete!(
     )) |
     ws!(exp_assign)
 ));
-
-macro_rules! stub_rule {
-    ($rulename:ident, $redirect_to: ident) => {
-        named!($rulename<Syntax>, alt_complete!(
-            ws!($redirect_to)
-        ));
-    }
-}
 
 named!(exp_assign<Syntax>, alt_complete!(
     ws!(do_parse!(
@@ -650,6 +665,22 @@ mod tests {
     }
 
     #[test]
+    fn test_lettuple() {
+        use syntax::Syntax::{Int, App, LetTuple, Var};
+        let result = exp(b"let (x, y) = make_pair 1 2 in x").unwrap();
+        assert_eq!(result.0, &[0u8; 0]);
+        match result.1 {
+            LetTuple(_pat, e1, e2) => {
+                assert_eq!(*e1,
+                           App(Box::new(Var("make_pair".to_string())),
+                               Box::new([Int(1), Int(2)])));
+                assert_eq!(*e2, Var("x".to_string()));
+            }
+            _ => panic!(),
+        }
+    }
+
+    #[test]
     fn test_semicolon() {
         use nom::IResult;
         use syntax::Syntax::{App, Int, Let, Unit, Var};
@@ -750,7 +781,7 @@ mod tests {
                                          CompBin::LE,
                                          Box::new(Int(4)),
                                          Box::new(Int(3)))))));
-        assert_eq!(exp(b"4 == 3"),
+        assert_eq!(exp(b"4 = 3"),
                    IResult::Done(&[0u8; 0][..],
                                  Syntax::CompBin(
                                      CompBin::Eq,
