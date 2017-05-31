@@ -25,6 +25,9 @@ lazy_static! {
                ("abs_float".to_string(),
                 Type::Fun(Box::new([Type::Float]),
                           Box::new(Type::Float))),
+               ("truncate".to_string(),
+                Type::Fun(Box::new([Type::Float]),
+                          Box::new(Type::Int))),
                ("int_of_float".to_string(),
                 Type::Fun(Box::new([Type::Float]),
                           Box::new(Type::Int))),
@@ -33,6 +36,9 @@ lazy_static! {
                           Box::new(Type::Float))),
                ("print_int".to_string(),
                 Type::Fun(Box::new([Type::Int]),
+                          Box::new(Type::Unit))),
+               ("print_newline".to_string(),
+                Type::Fun(Box::new([Type::Unit]),
                           Box::new(Type::Unit))),
         ].into_iter().collect();
 }

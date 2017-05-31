@@ -281,8 +281,8 @@ fn g(env: &HashMap<String, Type>, e: &Syntax,
         Syntax::Tuple(ref es) => Ok(Type::Tuple(g_seq!(es))),
         Syntax::LetTuple(ref xts, ref e1, ref e2) => {
             typed!(e1, Type::Tuple(xts.iter()
-                                  .map(|xt| xt.1.clone())
-                                  .collect::<Vec<_>>()
+                                   .map(|xt| xt.1.clone())
+                                   .collect::<Vec<_>>()
                                    .into_boxed_slice())); // List.map snd xts
             let mut cp_env = env.clone();
             for &(ref x, ref t) in xts.iter() {
@@ -291,8 +291,8 @@ fn g(env: &HashMap<String, Type>, e: &Syntax,
             invoke!(&cp_env, e2)
         },
         Syntax::Array(ref e1, ref e2) => {
-            typed!(e2, Type::Int);
-            let t = try!(invoke!(env, e1));
+            typed!(e1, Type::Int);
+            let t = try!(invoke!(env, e2));
             Ok(Type::Array(Box::new(t)))
         }
         Syntax::Get(ref e1, ref e2) => {
