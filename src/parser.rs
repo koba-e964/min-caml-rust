@@ -233,6 +233,19 @@ named!(exp_unary_minus<Syntax>, alt_complete!(
 named!(exp_app<Syntax>, alt_complete!(
     ws!(do_parse!(tag!("!") >> res: exp_app >> (Syntax::Not(Box::new(res))))) |
     ws!(do_parse!(
+        _init: alt_complete!(tag!("Array.create") | tag!("Array.make")) >>
+            res: many1!(ws!(simple_exp)) >>
+            ({
+                let mut res = res;
+                if res.len() != 2 {
+                    panic!("The number of Array.create is wrong");
+                }
+                let res1 = res.pop().unwrap();
+                let res0 = res.pop().unwrap();
+                Syntax::Array(Box::new(res0), Box::new(res1))
+            })
+    )) |
+    ws!(do_parse!(
         init: simple_exp >>
             res: many1!(ws!(simple_exp)) >>
             (Syntax::App(Box::new(init), res.into_boxed_slice()))
@@ -890,5 +903,16 @@ mod tests {
                                  App(
                                      Box::new(Var("func".to_string())),
                                      Box::new([Int(0), Int(1)]))));
+    }
+
+    #[test]
+    fn test_array_create() {
+        use nom::IResult;
+        use syntax::Syntax::{Array, Int};
+        assert_eq!(exp(b"Array.create 2 3"),
+                   IResult::Done(&[0u8; 0][..],
+                                 Array(
+                                     Box::new(Int(2)),
+                                     Box::new(Int(3)))));
     }
 }
