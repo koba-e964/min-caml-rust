@@ -26,6 +26,20 @@ named!(simple_exp<Syntax>,
                (res)
        ))
 );
+named!(array_index_list<(Syntax, Vec<Syntax>)>,
+       ws!(do_parse!(
+           init: simple_exp_no_index >>
+               res: fold_many1!(
+                   ws!(do_parse!(char!('.') >> char!('(') >> res: exp >> char!(')') >> (res))),
+                   Vec::new(),
+                   |mut acc: Vec<Syntax>, index| {
+                       acc.push(index);
+                       acc
+                   }
+               ) >>
+               ((init, res))
+       ))
+);
 
 named!(pub exp<Syntax>, ws!(exp_let));
 
@@ -97,7 +111,7 @@ named!(exp_semicolon<Syntax>, alt_complete!(
     ws!(do_parse!(
         e1: exp_if >>
             tag!(";") >>
-            e2: exp_semicolon >>
+            e2: exp >>
             (Syntax::Let(("_dummy".to_string(), Type::Unit),
                          Box::new(e1), Box::new(e2)))
     )) |
@@ -119,14 +133,17 @@ named!(exp_if<Syntax>, alt_complete!(
 
 named!(exp_assign<Syntax>, alt_complete!(
     ws!(do_parse!(
-        e1: ident >> // TODO hack
-            tag!(".") >>
-            tag!("(") >>
-            e2: exp >>
-            tag!(")") >>
+        base_indices: array_index_list >>
             tag!("<-") >>
-            e3: exp_comma >>
-            (Syntax::Put(Box::new(Syntax::Var(e1)), Box::new(e2), Box::new(e3)))
+            e: exp_comma >>
+            ({
+                let (mut base, mut indices) = base_indices;
+                let last = indices.pop().unwrap(); // indices.len() >= 1
+                for idx in indices {
+                    base = Syntax::Get(Box::new(base), Box::new(idx));
+                }
+                Syntax::Put(Box::new(base), Box::new(last), Box::new(e))
+            })
     )) |
     ws!(exp_comma)
 ));
@@ -296,7 +313,8 @@ fn is_not_ident_u8(x: u8) -> bool {
 
 fn is_ident(x: &[u8]) -> bool {
     let keywords = vec![&b"let"[..], &b"rec"[..], &b"in"[..], &b"true"[..],
-                        &b"false"[..], &b"if"[..], &b"then"[..], &b"else"[..]];
+                        &b"false"[..], &b"if"[..], &b"then"[..], &b"else"[..],
+                        &b"Array.create"[..], &b"Array.make"[..]];
     if x.len() == 0 || keywords.contains(&x) {
         return false;
     }
