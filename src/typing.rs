@@ -305,7 +305,7 @@ fn g(env: &HashMap<String, Type>, e: &Syntax,
             let t = try!(invoke!(env, e3));
             typed!(e1, Type::Array(Box::new(t.clone())));
             typed!(e2, Type::Int);
-            Ok(t)
+            Ok(Type::Unit)
         },
     }
 }
