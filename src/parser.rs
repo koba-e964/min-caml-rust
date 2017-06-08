@@ -75,6 +75,38 @@ named!(exp_let<Syntax>, alt_complete!(
     ws!(exp_semicolon)
 ));
 
+named!(exp_let_after_if<Syntax>, alt_complete!(
+    ws!(do_parse!(
+        tag!("let") >>
+            id: ident >>
+            tag!("=") >>
+            e1: exp >>
+            tag!("in") >>
+            e2: exp_let_after_if >>
+            (Syntax::Let((id, Type::Var(0) /* stub type */), Box::new(e1), Box::new(e2)))
+    )) |
+    ws!(do_parse!(
+        tag!("let") >>
+            tag!("rec") >>
+            f: fundef >>
+            tag!("in") >>
+            e: exp_let_after_if >>
+            (Syntax::LetRec(f, Box::new(e)))
+    )) |
+    ws!(do_parse!(
+        tag!("let") >>
+            tag!("(") >>
+            p: pat >>
+            tag!(")") >>
+            tag!("=") >>
+            e1: exp >>
+            tag!("in") >>
+            e2: exp_let_after_if >>
+            (Syntax::LetTuple(p.into_boxed_slice(), Box::new(e1), Box::new(e2)))
+    )) |
+    ws!(exp_if)
+));
+
 named!(pat<Vec<(String, Type)>>, ws!(do_parse!(
     init: ident >>
         res: fold_many1!(
@@ -125,7 +157,7 @@ named!(exp_if<Syntax>, alt_complete!(
             tag!("then") >>
             e2: exp >>
             tag!("else") >>
-            e3: exp_if >>
+            e3: exp_let_after_if >>
             (Syntax::If(Box::new(e1), Box::new(e2), Box::new(e3)))
     )) |
     ws!(exp_assign)
