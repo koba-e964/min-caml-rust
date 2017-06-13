@@ -9,3 +9,4 @@ pub mod id;
 pub mod typing;
 pub mod k_normal;
 pub mod alpha;
+pub mod beta;

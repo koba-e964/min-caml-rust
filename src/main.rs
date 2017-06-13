@@ -3,13 +3,16 @@ extern crate min_caml_rust;
 extern crate lazy_static;
 extern crate nom;
 
-use min_caml_rust::{id, parser, k_normal, typing, alpha};
+use min_caml_rust::{id, parser, k_normal, typing, alpha, beta};
 use min_caml_rust::syntax::Type;
 use nom::IResult;
 use std::collections::HashMap;
 use std::path::Path;
 use std::fs::File;
 use std::io::Read;
+
+const ITER_MAX: usize = 1000; // The max number of iteration
+
 
 lazy_static! {
     static ref EXTENV: HashMap<String, Type>
@@ -88,20 +91,13 @@ fn run(program: &[u8]) {
     println!("k_normal = {:?}", k_normal);
     let alpha = alpha::f(k_normal.0, &mut id_gen);
     println!("alpha = {:?}", alpha);
-}
-
-#[cfg(test)]
-mod tests {
-    use run;
-    #[test]
-    fn test_bunch_of_functions() {
-        let program = br#"
-print_int
-  (int_of_float
-     ((sin (cos (sqrt (abs_float (12.3))))
-         +. 4.5 -. 6.7 *. 8.9 /. 1.23456789)
-        *. float_of_int 1000000))
-"#;
-        run(program);
+    let mut e = alpha;
+    for i in 0 .. ITER_MAX {
+        let new_e = beta::f(e.clone());
+        if e == new_e {
+            break;
+        }
+        println!("iter[{}] = {:?}", i, new_e);
+        e = new_e;
     }
 }
