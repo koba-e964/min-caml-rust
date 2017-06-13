@@ -33,4 +33,8 @@ impl IdGen {
         let a = self.gen();
         format!("{}{}", Self::id_of_typ(t), a)
     }
+    pub fn gen_id(&mut self, x: &str) -> String {
+        let a = self.gen();
+        format!("{}{}", x, a)
+    }
 }

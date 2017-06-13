@@ -3,7 +3,7 @@ extern crate min_caml_rust;
 extern crate lazy_static;
 extern crate nom;
 
-use min_caml_rust::{id, parser, k_normal, typing};
+use min_caml_rust::{id, parser, k_normal, typing, alpha};
 use min_caml_rust::syntax::Type;
 use nom::IResult;
 use std::collections::HashMap;
@@ -85,7 +85,9 @@ fn run(program: &[u8]) {
     };
     println!("typed expr = {:?}", expr);
     let k_normal = k_normal::f(expr, &mut id_gen, &extenv);
-    println!("{:?}", k_normal);
+    println!("k_normal = {:?}", k_normal);
+    let alpha = alpha::f(k_normal.0, &mut id_gen);
+    println!("alpha = {:?}", alpha);
 }
 
 #[cfg(test)]
