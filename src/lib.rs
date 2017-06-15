@@ -11,3 +11,4 @@ pub mod k_normal;
 pub mod alpha;
 pub mod beta;
 pub mod assoc;
+pub mod elim;
