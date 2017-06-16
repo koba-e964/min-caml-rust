@@ -2,6 +2,7 @@ use ordered_float::OrderedFloat;
 use syntax::{IntBin, FloatBin, CompBin, Syntax, Type, Fundef};
 use id::{IdGen};
 use std::collections::{HashMap, HashSet};
+use std::fmt;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum KNormal {
@@ -30,6 +31,112 @@ pub struct KFundef {
     pub name: (String, Type),
     pub args: Box<[(String, Type)]>,
     pub body: Box<KNormal>,
+}
+
+// Display
+impl KNormal {
+        fn fmt2(&self, f: &mut fmt::Formatter, level: usize) -> fmt::Result {
+        use self::KNormal::*;
+        match *self {
+            Unit => write!(f, "()"),
+            Int(v) => write!(f, "{}", v),
+            Float(fv) => write!(f, "{}", fv),
+            Neg(ref x) => write!(f, "-{}", x),
+            IntBin(op, ref x, ref y) => {
+                let op_str = match op {
+                    self::IntBin::Add => "+",
+                    self::IntBin::Sub => "-",
+                };
+                write!(f, "{} {} {}", x, op_str, y)
+            },
+            FNeg(ref x) => write!(f, "-.{}", x),
+            FloatBin(op, ref x, ref y) => {
+                let op_str = match op {
+                    self::FloatBin::FAdd => "+.",
+                    self::FloatBin::FSub => "-.",
+                    self::FloatBin::FMul => "*.",
+                    self::FloatBin::FDiv => "/.",
+                };
+                write!(f, "{} {} {}", x, op_str, y)
+            },
+            IfComp(op, ref x, ref y, ref e1, ref e2) => {
+                let op_str = match op {
+                    self::CompBin::Eq => "=",
+                    self::CompBin::LE => "<=",
+                };
+                write!(f, "if {} {} {} then\n", x, op_str, y)?;
+                for _ in 0 .. level + 2 {
+                    write!(f, " ")?;
+                }
+                e1.fmt2(f, level + 2)?;
+                write!(f, "\n")?;
+                for _ in 0 .. level {
+                    write!(f, " ")?;
+                }
+                write!(f, "else\n")?;
+                for _ in 0 .. level + 2 {
+                    write!(f, " ")?;
+                }
+                e2.fmt2(f, level + 2)
+            },
+            Let((ref x, ref t), ref e1, ref e2) => {
+                if let Type::Unit = *t {
+                    if x.len() >= 6 && &x[0..6] == "_dummy" {
+                        // this let expression is actually "e1; e2"
+                        e1.fmt2(f, level)?;
+                        write!(f, ";\n")?;
+                        for _ in 0 .. level {
+                            write!(f, " ")?;
+                        }
+                        return e2.fmt2(f, level);
+                    }
+                }
+                write!(f, "let {}: {:?} = ", x, t)?;
+                e1.fmt2(f, level)?;
+                write!(f, " in\n")?;
+                for _ in 0 .. level {
+                    write!(f, " ")?;
+                }
+                e2.fmt2(f, level)
+            },
+            Var(ref x) => write!(f, "{}", x),
+            LetRec(KFundef { name: (ref x, ref t), args: ref yts, body: ref e1 },
+                   ref e2) => {
+                write!(f, "let rec ({}: {:?}) ({:?}) =\n", x, t, yts)?;
+                for _ in 0 .. level + 1 {
+                    write!(f, " ")?;
+                }
+                e1.fmt2(f, level + 1)?;
+                write!(f, " in\n")?;
+                for _ in 0 .. level {
+                    write!(f, " ")?;
+                }
+                e2.fmt2(f, level)
+            }
+            App(ref func, ref args) => write!(f, "{} {:?}", func, args),
+            Tuple(ref elems) =>
+                write!(f, "{:?}", elems),
+            LetTuple(ref xts, ref y, ref e) => {
+                write!(f, "let ({:?}) = {} in\n", xts, y)?;
+                for _ in 0 .. level {
+                    write!(f, " ")?;
+                }
+                e.fmt2(f, level)
+            },
+            Get(ref x, ref y) =>
+                write!(f, "{}.({})", x, y),
+            Put(ref x, ref y, ref z) =>
+                write!(f, "{}.({}) <- {}", x, y, z),
+            ExtArray(ref a) => write!(f, "(extarr:{}", a),
+            ExtFunApp(ref func, ref args) => write!(f, "(ext:{}) {:?}", func, args),
+        }
+    }
+}
+
+impl fmt::Display for KNormal {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.fmt2(f, 0)
+    }
 }
 
 /*

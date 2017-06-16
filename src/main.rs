@@ -88,16 +88,16 @@ fn run(program: &[u8]) {
     };
     println!("typed expr = {:?}", expr);
     let k_normal = k_normal::f(expr, &mut id_gen, &extenv);
-    println!("k_normal = {:?}", k_normal);
+    println!("k_normal = {}", k_normal.0);
     let alpha = alpha::f(k_normal.0, &mut id_gen);
-    println!("alpha = {:?}", alpha);
+    println!("alpha = {}", alpha);
     let mut e = alpha;
     for i in 0 .. ITER_MAX {
         let new_e = elim::f(const_fold::f(assoc::f(beta::f(e.clone()))));
         if e == new_e {
             break;
         }
-        println!("iter[{}] = {:?}", i, new_e);
+        println!("iter[{}] = {}", i, new_e);
         e = new_e;
     }
 }
