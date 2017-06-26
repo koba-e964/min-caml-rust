@@ -91,7 +91,7 @@ impl KNormal {
                         return e2.fmt2(f, level);
                     }
                 }
-                write!(f, "let {}: {:?} = ", x, t)?;
+                write!(f, "let {}: {} = ", x, t)?;
                 e1.fmt2(f, level)?;
                 write!(f, " in\n")?;
                 for _ in 0 .. level {
@@ -102,7 +102,11 @@ impl KNormal {
             Var(ref x) => write!(f, "{}", x),
             LetRec(KFundef { name: (ref x, ref t), args: ref yts, body: ref e1 },
                    ref e2) => {
-                write!(f, "let rec ({}: {:?}) ({:?}) =\n", x, t, yts)?;
+                write!(f, "let rec ({}: {})", x, t)?;
+                for i in 0 .. yts.len() {
+                    write!(f, " ({}: {})", yts[i].0, yts[i].1)?;
+                }
+                write!(f, " =\n")?;
                 for _ in 0 .. level + 1 {
                     write!(f, " ")?;
                 }
@@ -113,11 +117,32 @@ impl KNormal {
                 }
                 e2.fmt2(f, level)
             }
-            App(ref func, ref args) => write!(f, "{} {:?}", func, args),
-            Tuple(ref elems) =>
-                write!(f, "{:?}", elems),
+            App(ref func, ref args) => {
+                write!(f, "{}", func)?;
+                for v in args.iter() {
+                    write!(f, " {}", v)?;
+                }
+                Ok(())
+            },
+            Tuple(ref elems) => {
+                write!(f, "(")?;
+                for i in 0 .. elems.len() {
+                    write!(f, "{}", elems[i])?;
+                    if i < elems.len() - 1 {
+                        write!(f, ", ")?;
+                    }
+                }
+                write!(f, ")")
+            },
             LetTuple(ref xts, ref y, ref e) => {
-                write!(f, "let ({:?}) = {} in\n", xts, y)?;
+                write!(f, "let (")?;
+                for i in 0 .. xts.len() {
+                    write!(f, "{}: {}", xts[i].0, xts[i].1)?;
+                    if i < xts.len() - 1 {
+                        write!(f, ", ")?;
+                    }
+                }
+                write!(f, ") = {} in\n", y)?;
                 for _ in 0 .. level {
                     write!(f, " ")?;
                 }
@@ -127,8 +152,14 @@ impl KNormal {
                 write!(f, "{}.({})", x, y),
             Put(ref x, ref y, ref z) =>
                 write!(f, "{}.({}) <- {}", x, y, z),
-            ExtArray(ref a) => write!(f, "(extarr:{}", a),
-            ExtFunApp(ref func, ref args) => write!(f, "(ext:{}) {:?}", func, args),
+            ExtArray(ref a) => write!(f, "(extarr:{})", a),
+            ExtFunApp(ref func, ref args) => {
+                write!(f, "(ext:{})", func)?;
+                for v in args.iter() {
+                    write!(f, " {}", v)?;
+                }
+                Ok(())
+            },
         }
     }
 }
