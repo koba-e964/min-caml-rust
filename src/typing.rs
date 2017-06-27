@@ -313,60 +313,68 @@ fn g(env: &HashMap<String, Type>, e: &Syntax,
 /*
  * Type-check a given AST e.
  * Returns the resulting AST and extenv (environment of external functions).
+ * If this function succeeds, an AST wrapped with Ok is returned and extenv is
+ * updated.
+ * If this function fails, an error message wrapped with Err is returned.
+ * The content of extenv is unspecified.
  */
-pub fn f(e: &Syntax, id_gen: &mut IdGen)
-         -> Result<(Syntax, HashMap<String, Type>), String> {
-    let mut extenv = HashMap::new();
+pub fn f(e: &Syntax, id_gen: &mut IdGen, extenv: &mut HashMap<String, Type>)
+         -> Result<Syntax, String> {
     let mut tyenv = HashMap::new();
-    let typed = g(&HashMap::new(), e, &mut extenv, &mut tyenv, id_gen)
+    let typed = g(&HashMap::new(), e, extenv, &mut tyenv, id_gen)
         .unwrap();
     println!("{:?}", typed);
-    match unify(&Type::Unit, &typed, &mut extenv, &mut tyenv) {
+    match unify(&Type::Unit, &typed, extenv, &mut tyenv) {
         Err(TypingError::Unify(_, _)) =>
             return Err("top level does not have type unit".to_string()),
         Ok(()) => {},
     }
-    extenv = extenv.into_iter().map(|(k, x)| (k, deref_typ(&x, &tyenv))).collect();
-    Ok((deref_term(e, &tyenv), extenv))
+    *extenv = extenv.iter().map(|(k, x)| (k.clone(), deref_typ(&x, &tyenv))).collect();
+    Ok(deref_term(e, &tyenv))
 }
 
 #[cfg(test)]
 mod tests{
     use typing::*;
     use syntax::*;
+    use std::collections::HashMap;
     #[test]
     fn test_typing_add() {
         use self::Syntax::*;
         let mut id_gen = IdGen::new();
+        let mut extenv = HashMap::new();
         let syn = IntBin(self::IntBin::Add,
                          Box::new(Int(14)),
                          Box::new(Int(23)));
-        assert!(f(&syn, &mut id_gen).is_err()); // top is not :unit.
+        assert!(f(&syn, &mut id_gen, &mut extenv).is_err()); // top is not :unit.
     }
     #[test]
     fn test_typing_ext_print() {
         use self::Syntax::*;
         let mut id_gen = IdGen::new();
+        let mut extenv = HashMap::new();
         let syn = App(Box::new(Var("print_int".to_string())),
                       Box::new([Int(23)]));
-        assert!(f(&syn, &mut id_gen).is_ok()); // top can be :unit.
+        assert!(f(&syn, &mut id_gen, &mut extenv).is_ok()); // top can be :unit.
     }
     #[test]
     fn test_typing_letrec() {
         use self::Syntax::*;
         let mut id_gen = IdGen::new();
+        let mut extenv = HashMap::new();
         // let rec f x = f x in f 0
         let fundef = LetRec(Fundef {
             name: ("f".to_string(), Type::Var(100)),
             args: Box::new([("x".to_string(), Type::Var(101))]),
             body: Box::new(App(Box::new(Var("f".to_string())), Box::new([Var("x".to_string())])))
         }, Box::new(App(Box::new(Var("f".to_string())), Box::new([Int(0)]))));
-        assert!(f(&fundef, &mut id_gen).is_ok());
+        assert!(f(&fundef, &mut id_gen, &mut extenv).is_ok());
     }
     #[test]
     fn test_typing_tuple() {
         use self::Syntax::*;
         let mut id_gen = IdGen::new();
+        let mut extenv = HashMap::new();
         let tuple = Tuple(Box::new([Int(4), Int(5)]
                           )); // (4, 5)
         // let (x: int, y: 'a100) = (...) in x
@@ -377,17 +385,36 @@ mod tests{
                               Box::new(Var("x".to_string())));
         let printer = App(Box::new(Var("print_int".to_string())),
                       Box::new([let_ex])); // print_int (...)
-        assert!(f(&printer, &mut id_gen).is_ok());
+        assert!(f(&printer, &mut id_gen, &mut extenv).is_ok());
     }
     #[test]
     fn test_typing_array() {
         use self::Syntax::*;
         let mut id_gen = IdGen::new();
+        let mut extenv = HashMap::new();
         let ary = Array(Box::new(Int(4)), Box::new(Int(5))); // newarray 4 5
         let access = Get(Box::new(ary), Box::new(Int(2))); // (...).(2)
         let printer = App(Box::new(Var("print_int".to_string())),
                       Box::new([access]));
-        assert!(f(&printer, &mut id_gen).is_ok());
+        assert!(f(&printer, &mut id_gen, &mut extenv).is_ok());
+    }
+    #[test]
+    fn test_typing_extenv() {
+        use self::Syntax::*;
+        let mut id_gen = IdGen::new();
+        let test = || "test".to_string();
+        let mut extenv = [(test(), Type::Unit)].iter().cloned().collect();
+        let syn = Var(test());
+        assert!(f(&syn, &mut id_gen, &mut extenv).is_ok());
+    }
+    #[test]
+    fn test_typing_extenv_negative() {
+        use self::Syntax::*;
+        let mut id_gen = IdGen::new();
+        let test = || "test".to_string();
+        let mut extenv = [(test(), Type::Int)].iter().cloned().collect();
+        let syn = Var(test());
+        assert!(f(&syn, &mut id_gen, &mut extenv).is_err()); // top-level type is not unit
     }
     #[test]
     fn test_deref_typ() {

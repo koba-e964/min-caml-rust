@@ -81,8 +81,8 @@ fn run(program: &[u8]) {
     };
     let expr = parser::uniquify(expr, &mut id_gen);
     println!("expr = {:?}", expr);
-    let extenv = EXTENV.clone();
-    let (expr, _extenv) = match typing::f(&expr, &mut id_gen) {
+    let mut extenv = EXTENV.clone();
+    let expr = match typing::f(&expr, &mut id_gen, &mut extenv) {
         Ok(x) => x,
         Err(msg) => panic!(format!("error typecheck: {}", msg)),
     };
