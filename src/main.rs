@@ -93,7 +93,7 @@ fn run(program: &[u8]) {
     println!("alpha = {}", alpha);
     let mut e = alpha;
     for i in 0 .. ITER_MAX {
-        let new_e = elim::f(const_fold::f(assoc::f(beta::f(e.clone()))));
+        let new_e = elim::f(const_fold::f(assoc::f(beta::f(e.clone())), &mut id_gen));
         if e == new_e {
             break;
         }
