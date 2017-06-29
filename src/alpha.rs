@@ -21,9 +21,7 @@ fn g(env: &HashMap<String, String>, e: KNormal, id_gen: &mut IdGen) -> KNormal {
     macro_rules! find_vec_mut {
         ($vec: expr) => {
             for v in $vec.iter_mut() {
-                let mut dummy = "".to_string();
-                std::mem::swap(v, &mut dummy);
-                *v = find!(dummy);
+                *v = find!(std::mem::replace(v, "".to_string()));
             }
         }
     }
@@ -69,11 +67,10 @@ fn g(env: &HashMap<String, String>, e: KNormal, id_gen: &mut IdGen) -> KNormal {
         LetTuple(mut xts, y, e) => {
             let mut cp_env = env.clone();
             for i in 0 .. xts.len() {
-                let mut dummy = "".to_string();
-                std::mem::swap(&mut dummy, &mut xts[i].0);
-                let newx = id_gen.gen_id(&dummy);
+                let entry = std::mem::replace(&mut xts[i].0, "".to_string());
+                let newx = id_gen.gen_id(&entry);
                 xts[i].0 = newx.clone();
-                cp_env.insert(dummy, newx);
+                cp_env.insert(entry, newx);
             }
             LetTuple(xts, find!(y), Box::new(g(&cp_env, *e, id_gen)))
         },

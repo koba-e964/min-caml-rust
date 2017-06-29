@@ -20,9 +20,7 @@ fn g(env: &HashMap<String, String>, e: KNormal) -> KNormal {
     macro_rules! find_vec_mut {
         ($vec: expr) => {
             for v in $vec.iter_mut() {
-                let mut dummy = "".to_string();
-                std::mem::swap(v, &mut dummy);
-                *v = find!(dummy);
+                *v = find!(std::mem::replace(v, "".to_string()));
             }
         }
     }
@@ -52,10 +50,8 @@ fn g(env: &HashMap<String, String>, e: KNormal) -> KNormal {
         Var(x) => Var(find!(x)),
         LetRec(KFundef { name: xt, args: mut yts, body: e1 }, e2) => {
             for i in 0 .. yts.len() {
-                let mut dummy = "".to_string();
-                std::mem::swap(&mut dummy, &mut yts[i].0);
-                let newy = find!(dummy);
-                yts[i].0 = newy;
+                let entry = std::mem::replace(&mut yts[i].0, "".to_string());
+                yts[i].0 = find!(entry);
             }
             LetRec(KFundef { name: xt, args: yts,
                             body: invoke!(e1) },

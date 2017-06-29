@@ -405,14 +405,13 @@ pub fn uniquify(expr: Syntax, id_gen: &mut IdGen) -> Syntax {
                 t
             };
             for i in 0 .. args.len() {
-                let mut dummy = Type::Unit;
-                std::mem::swap(&mut args[i].1, &mut dummy);
-                let t = if let Type::Var(_) = dummy {
+                let entry = std::mem::replace(&mut args[i].1, Type::Unit);
+                let new_ty = if let Type::Var(_) = entry {
                     id_gen.gen_type()
                 } else {
-                    dummy
+                    entry
                 };
-                args[i].1 = t;
+                args[i].1 = new_ty;
             }
             let e1 = Box::new(uniquify(*e1, id_gen));
             let e2 = Box::new(uniquify(*e2, id_gen));
@@ -494,9 +493,8 @@ pub fn uniquify(expr: Syntax, id_gen: &mut IdGen) -> Syntax {
 
 fn uniquify_box(es: &mut Box<[Syntax]>, id_gen: &mut IdGen) {
     for i in 0 .. es.len() {
-        let mut dummy = Syntax::Unit;
-        std::mem::swap(&mut dummy, &mut es[i]);
-        es[i] = uniquify(dummy, id_gen);
+        let entry = std::mem::replace(&mut es[i], Syntax::Unit);
+        es[i] = uniquify(entry, id_gen);
     }
 }
 
