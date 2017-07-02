@@ -10,11 +10,16 @@ fn g(env: &HashMap<String, String>, e: KNormal, id_gen: &mut IdGen) -> KNormal {
     macro_rules! invoke {
         ($e: expr) => { Box::new(g(env, *$e, id_gen)) }
     }
+    // You can call this macro with an effectful expression,
+    // because $name is evaluated exactly once.
     macro_rules! find {
         ($name: expr) => {
-            match env.get(&$name) {
-                Some(p) => p.clone(),
-                None => $name,
+            {
+                let name = $name;
+                match env.get(&name) {
+                    Some(p) => p.clone(),
+                    None => panic!("env should have variable {}: env = {:?}, varname = {}", name, env, name),
+                }
             }
         }
     }

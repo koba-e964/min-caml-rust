@@ -20,7 +20,8 @@ fn g(env: &HashMap<String, String>, e: KNormal) -> KNormal {
     macro_rules! find_vec_mut {
         ($vec: expr) => {
             for v in $vec.iter_mut() {
-                *v = find!(std::mem::replace(v, "".to_string()));
+                let picked = std::mem::replace(v, "".to_string());
+                *v = find!(picked);
             }
         }
     }
@@ -96,6 +97,20 @@ mod tests {
                                  Box::new(Var(y())))));
         let e2 = Let((x(), Type::Int), Box::new(Int(1)),
                      Box::new(Var(x())));
+        assert_eq!(f(e), e2);
+    }
+    #[test]
+    fn test_let_tuple() {
+        use k_normal::KNormal::App;
+        use super::f;
+        // A bug in find_vec_mut! makes this test fail
+        // x y z should be
+        // x y z
+        let x = || "x".to_string();
+        let y = || "y".to_string();
+        let z = || "z".to_string();
+        let e = App(x(), Box::new([y(), z()]));
+        let e2 = e.clone();
         assert_eq!(f(e), e2);
     }
     #[test]
