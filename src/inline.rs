@@ -62,3 +62,42 @@ fn g(env: &HashMap<String, (Box<[(String, Type)]>, KNormal)>, e: KNormal, id_gen
 pub fn f(e: KNormal, id_gen: &mut IdGen, inline_threshold: usize) -> KNormal {
     g(&HashMap::new(), e, id_gen, inline_threshold)
 }
+
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_inline() {
+        use id::IdGen;
+        use k_normal::KFundef;
+        use k_normal::KNormal::{LetRec, App, IntBin};
+        use syntax::Type;
+        use super::f;
+        // let rec f x = x + x in f y ===> y + y
+        let ff = || "f".to_string();
+        let x = || "x".to_string();
+        let y = || "y".to_string();
+        let e = LetRec(
+            KFundef {
+                name: (ff(), Type::Fun(
+                    Box::new([Type::Int]), Box::new(Type::Int))),
+                args: Box::new([("x".to_string(), Type::Int)]),
+                body: Box::new(IntBin(
+                    ::syntax::IntBin::Add,
+                    x(), x())) },
+            Box::new(App(ff(), Box::new([y()]))));
+        let e_expected = LetRec(
+            KFundef {
+                name: (ff(), Type::Fun(
+                    Box::new([Type::Int]), Box::new(Type::Int))),
+                args: Box::new([("x".to_string(), Type::Int)]),
+                body: Box::new(IntBin(
+                    ::syntax::IntBin::Add,
+                    x(), x())) },
+            Box::new(IntBin(
+                ::syntax::IntBin::Add,
+                y(), y())));
+        let mut id_gen = IdGen::new();
+        assert_eq!(f(e, &mut id_gen, 5000), e_expected);
+    }
+}
