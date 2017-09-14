@@ -5,7 +5,7 @@ use id::IdGen;
 use std::collections::HashMap;
 
 
-fn g(env: &HashMap<String, String>, e: KNormal, id_gen: &mut IdGen) -> KNormal {
+pub fn g(env: &HashMap<String, String>, e: KNormal, id_gen: &mut IdGen) -> KNormal {
     use self::KNormal::*;
     macro_rules! invoke {
         ($e: expr) => { Box::new(g(env, *$e, id_gen)) }
@@ -18,7 +18,8 @@ fn g(env: &HashMap<String, String>, e: KNormal, id_gen: &mut IdGen) -> KNormal {
                 let name = $name;
                 match env.get(&name) {
                     Some(p) => p.clone(),
-                    None => panic!("env should have variable {}: env = {:?}, varname = {}", name, env, name),
+                    None => name.clone(),
+                    // None => panic!("env should have variable {}: env = {:?}, varname = {}", name, env, name),
                 }
             }
         }

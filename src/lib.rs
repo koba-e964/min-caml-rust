@@ -13,3 +13,4 @@ pub mod beta;
 pub mod assoc;
 pub mod elim;
 pub mod const_fold;
+pub mod inline;

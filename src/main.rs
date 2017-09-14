@@ -3,7 +3,9 @@ extern crate min_caml_rust;
 extern crate lazy_static;
 extern crate nom;
 
-use min_caml_rust::{id, parser, k_normal, typing, alpha, beta, assoc, const_fold, elim};
+use min_caml_rust::{id, parser, k_normal, typing,
+                    alpha, beta, assoc, const_fold,
+                    elim, inline};
 use min_caml_rust::syntax::Type;
 use nom::IResult;
 use std::collections::HashMap;
@@ -94,6 +96,7 @@ fn run(program: &[u8]) {
     let mut e = alpha;
     for i in 0 .. ITER_MAX {
         let new_e = elim::f(const_fold::f(assoc::f(beta::f(e.clone())), &mut id_gen));
+        let new_e = inline::f(new_e, &mut id_gen, 50);
         if e == new_e {
             break;
         }
