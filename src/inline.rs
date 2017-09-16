@@ -4,7 +4,7 @@ use k_normal::{KNormal, KFundef, fv};
 use syntax::Type;
 use id::IdGen;
 
-fn is_recursive(&KFundef { name: (ref x, ref t), args: ref yts, body: ref e1 }: &KFundef)
+fn is_recursive(&KFundef { name: (ref x, ref _t), args: ref _yts, body: ref e1 }: &KFundef)
                 -> bool {
     fv(&e1).contains(x)
 }
@@ -79,7 +79,7 @@ mod tests {
         use k_normal::KNormal::{LetRec, App, IntBin};
         use syntax::Type;
         use super::f;
-        // let rec f x = x + x in f y ===> y + y
+        // let rec f x = x + x in f y ===> let rec f x = x + x in y + y
         let ff = || "f".to_string();
         let x = || "x".to_string();
         let y = || "y".to_string();
