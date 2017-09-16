@@ -1,10 +1,15 @@
 use std::collections::HashMap;
 use alpha;
-use k_normal::{KNormal, KFundef};
+use k_normal::{KNormal, KFundef, fv};
 use syntax::Type;
 use id::IdGen;
 
-fn size(e: &KNormal) -> usize {
+fn is_recursive(&KFundef { name: (ref x, ref t), args: ref yts, body: ref e1 }: &KFundef)
+                -> bool {
+    fv(&e1).contains(x)
+}
+
+pub fn size(e: &KNormal) -> usize {
     use self::KNormal::*;
     match *e {
         IfComp(_, _, _, ref e1, ref e2) |
@@ -30,14 +35,15 @@ fn g(env: &HashMap<String, (Box<[(String, Type)]>, KNormal)>, e: KNormal, id_gen
         Let((x, t), e1, e2) =>
             Let((x, t), invoke!(e1), invoke!(e2)),
         LetRec(KFundef { name: (x, t), args: yts, body: e1 }, e2) => {
-            let mut env = env.clone();
-            if size(&e1) <= inline_threshold {
-                env.insert(x.clone(), (yts.clone(), (&e1 as &KNormal).clone()));
+            let mut cp_env = env.clone();
+            let is_rec = is_recursive(&(KFundef { name: (x.clone(), t.clone()), args: yts.clone(), body: e1.clone() })); // Apparently these clone()s should be unnecessary.
+            if size(&e1) <= inline_threshold && !is_rec {
+                    cp_env.insert(x.clone(), (yts.clone(), (&e1 as &KNormal).clone()));
             }
             LetRec(KFundef {
                 name: (x, t), args: yts,
-                body: Box::new(g(&env, *e1, id_gen, inline_threshold)) },
-                   Box::new(g(&env, *e2, id_gen, inline_threshold)))
+                body: Box::new(g(&env, *e1, id_gen, inline_threshold)) }, // avoid further inlining in the body of recursive functions
+                   Box::new(g(&cp_env, *e2, id_gen, inline_threshold)))
         },
         App(x, ys) => {
             if let Some(zse) = env.get(&x) {
