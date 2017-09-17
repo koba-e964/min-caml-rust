@@ -2,6 +2,7 @@ use ordered_float::OrderedFloat;
 use syntax::{IntBin, FloatBin, CompBin, Type};
 use k_normal::{KNormal, KFundef};
 use std::collections::{HashMap, HashSet};
+use std::fmt;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Cls {
@@ -41,6 +42,166 @@ pub struct Fundef {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Prog(Box<[Fundef]>, Closure);
+
+// Display
+impl Closure {
+    fn fmt2(&self, f: &mut fmt::Formatter, level: usize) -> fmt::Result {
+        use self::Closure::*;
+        match *self {
+            Unit => write!(f, "()"),
+            Int(v) => write!(f, "{}", v),
+            Float(fv) => write!(f, "{}", fv),
+            Neg(ref x) => write!(f, "-{}", x),
+            IntBin(op, ref x, ref y) => {
+                let op_str = match op {
+                    self::IntBin::Add => "+",
+                    self::IntBin::Sub => "-",
+                };
+                write!(f, "{} {} {}", x, op_str, y)
+            },
+            FNeg(ref x) => write!(f, "-.{}", x),
+            FloatBin(op, ref x, ref y) => {
+                let op_str = match op {
+                    self::FloatBin::FAdd => "+.",
+                    self::FloatBin::FSub => "-.",
+                    self::FloatBin::FMul => "*.",
+                    self::FloatBin::FDiv => "/.",
+                };
+                write!(f, "{} {} {}", x, op_str, y)
+            },
+            IfComp(op, ref x, ref y, ref e1, ref e2) => {
+                let op_str = match op {
+                    self::CompBin::Eq => "=",
+                    self::CompBin::LE => "<=",
+                };
+                write!(f, "if {} {} {} then\n", x, op_str, y)?;
+                for _ in 0 .. level + 2 {
+                    write!(f, " ")?;
+                }
+                e1.fmt2(f, level + 2)?;
+                write!(f, "\n")?;
+                for _ in 0 .. level {
+                    write!(f, " ")?;
+                }
+                write!(f, "else\n")?;
+                for _ in 0 .. level + 2 {
+                    write!(f, " ")?;
+                }
+                e2.fmt2(f, level + 2)
+            },
+            Let((ref x, ref t), ref e1, ref e2) => {
+                if let Type::Unit = *t {
+                    if x.len() >= 6 && &x[0..6] == "_dummy" {
+                        // this let expression is actually "e1; e2"
+                        e1.fmt2(f, level)?;
+                        write!(f, ";\n")?;
+                        for _ in 0 .. level {
+                            write!(f, " ")?;
+                        }
+                        return e2.fmt2(f, level);
+                    }
+                }
+                write!(f, "let {}: {} = ", x, t)?;
+                e1.fmt2(f, level)?;
+                write!(f, " in\n")?;
+                for _ in 0 .. level {
+                    write!(f, " ")?;
+                }
+                e2.fmt2(f, level)
+            },
+            Var(ref x) => write!(f, "{}", x),
+            MakeCls(ref x, ref t, ref cls, ref e) => {
+                write!(f, "MakeCls {}: {} (", x, t)?;
+                let Cls { ref entry, actual_fv: ref fv } = *cls;
+                write!(f, "{} {:?}) in\n", entry, fv)?;
+                for _ in 0 .. level {
+                    write!(f, " ")?;
+                }
+                e.fmt2(f, level)
+            },
+            AppDir(ref func, ref args) => {
+                write!(f, "{}", func)?;
+                for v in args.iter() {
+                    write!(f, " {}", v)?;
+                }
+                Ok(())
+            },
+            AppCls(ref func, ref args) => {
+                write!(f, "[{}]", func)?;
+                for v in args.iter() {
+                    write!(f, " {}", v)?;
+                }
+                Ok(())
+            },
+            Tuple(ref elems) => {
+                write!(f, "(")?;
+                for i in 0 .. elems.len() {
+                    write!(f, "{}", elems[i])?;
+                    if i < elems.len() - 1 {
+                        write!(f, ", ")?;
+                    }
+                }
+                write!(f, ")")
+            },
+            LetTuple(ref xts, ref y, ref e) => {
+                write!(f, "let (")?;
+                for i in 0 .. xts.len() {
+                    write!(f, "{}: {}", xts[i].0, xts[i].1)?;
+                    if i < xts.len() - 1 {
+                        write!(f, ", ")?;
+                    }
+                }
+                write!(f, ") = {} in\n", y)?;
+                for _ in 0 .. level {
+                    write!(f, " ")?;
+                }
+                e.fmt2(f, level)
+            },
+            Get(ref x, ref y) =>
+                write!(f, "{}.({})", x, y),
+            Put(ref x, ref y, ref z) =>
+                write!(f, "{}.({}) <- {}", x, y, z),
+            ExtArray(ref a) => write!(f, "(extarr:{})", a),
+        }
+    }
+}
+
+impl fmt::Display for Closure {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.fmt2(f, 0)
+    }
+}
+
+impl fmt::Display for Fundef {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let Fundef { name: (ref x, ref t), args: ref yts, body: ref e1,
+                     formal_fv: ref fv } = *self;
+        write!(f, "define ({}: {})", x, t)?;
+        for &(ref y, ref t) in yts.iter() {
+            write!(f, " ({}: {})", y, t)?;
+        }
+        if !fv.is_empty() {
+            write!(f, " freevar:")?;
+            for &(ref x, ref t) in fv.iter() {
+                write!(f, " ({}: {})", x, t)?;
+            }
+        }
+        write!(f, " {{\n")?;
+        write!(f, "  ")?;
+        e1.fmt2(f, 2)?;
+        write!(f, "\n}}")
+    }
+}
+
+impl fmt::Display for Prog {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let Prog(ref fundefs, ref e) = *self;
+        for fundef in fundefs.iter() {
+            write!(f, "{}\n", fundef)?;
+        }
+        write!(f, "{}", e)
+    }
+}
 
 macro_rules! build_set {
     ($($x:expr),*) => ({

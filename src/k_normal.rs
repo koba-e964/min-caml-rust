@@ -35,7 +35,7 @@ pub struct KFundef {
 
 // Display
 impl KNormal {
-        fn fmt2(&self, f: &mut fmt::Formatter, level: usize) -> fmt::Result {
+    fn fmt2(&self, f: &mut fmt::Formatter, level: usize) -> fmt::Result {
         use self::KNormal::*;
         match *self {
             Unit => write!(f, "()"),

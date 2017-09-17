@@ -104,5 +104,5 @@ fn run(program: &[u8]) {
         e = new_e;
     }
     let closure = closure::f(e);
-    println!("closure-trans = {:?}", closure);
+    println!("closure-trans = {}", closure);
 }
