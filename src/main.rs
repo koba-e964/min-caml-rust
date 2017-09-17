@@ -5,7 +5,7 @@ extern crate nom;
 
 use min_caml_rust::{id, parser, k_normal, typing,
                     alpha, beta, assoc, const_fold,
-                    elim, inline};
+                    elim, inline, closure};
 use min_caml_rust::syntax::Type;
 use nom::IResult;
 use std::collections::HashMap;
@@ -103,4 +103,6 @@ fn run(program: &[u8]) {
         println!("iter[{}] = {}", i, new_e);
         e = new_e;
     }
+    let closure = closure::f(e);
+    println!("closure-trans = {:?}", closure);
 }
