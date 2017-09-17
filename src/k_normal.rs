@@ -185,14 +185,12 @@ pub fn fv(e: &KNormal) -> HashSet<String> {
         })
     }
     match *e {
-        KNormal::Unit => HashSet::new(),
-        KNormal::Int(_) => HashSet::new(),
-        KNormal::Float(_) => HashSet::new(),
-        KNormal::ExtArray(_) => HashSet::new(),
-        KNormal::Neg(ref x) => build_set!(x),
-        KNormal::FNeg(ref x) => build_set!(x),
-        KNormal::IntBin(_, ref x, ref y) => build_set!(x, y),
-        KNormal::FloatBin(_, ref x, ref y) => build_set!(x, y),
+        KNormal::Unit | KNormal::Int(_) |
+        KNormal::Float(_) | KNormal::ExtArray(_) => HashSet::new(),
+        KNormal::Neg(ref x) | KNormal::FNeg(ref x) => build_set!(x),
+        KNormal::IntBin(_, ref x, ref y) |
+        KNormal::FloatBin(_, ref x, ref y) |
+        KNormal::Get(ref x, ref y) => build_set!(x, y),
         KNormal::IfComp(_, ref x, ref y, ref e1, ref e2) => {
             let h = build_set!(x, y);
             let s1 = invoke!(e1);
@@ -220,7 +218,6 @@ pub fn fv(e: &KNormal) -> HashSet<String> {
                 .collect(); // S.of_list (List.map fst xs)
             &build_set!(y) | &(&invoke!(e) - &tmp)
         },
-        KNormal::Get(ref x, ref y) => build_set!(x, y),
         KNormal::Put(ref x, ref y, ref z) => build_set!(x, y, z),
         KNormal::ExtFunApp(_, ref xs) => xs.iter().cloned().collect(),
     }

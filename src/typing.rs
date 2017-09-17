@@ -141,22 +141,22 @@ fn unify(t1: &Type, t2: &Type,
             }
         }
     }
-    match (t1.clone(), t2.clone()) { // TODO ugly hack
-        (Type::Unit, Type::Unit) => Ok(()),
-        (Type::Bool, Type::Bool) => Ok(()),
-        (Type::Int, Type::Int) => Ok(()),
-        (Type::Float, Type::Float) => Ok(()),
-        (Type::Fun(ref t1s, ref t1cod), Type::Fun(ref t2s, ref t2cod)) => {
+    match (t1, t2) {
+        (&Type::Unit, &Type::Unit) => Ok(()),
+        (&Type::Bool, &Type::Bool) => Ok(()),
+        (&Type::Int, &Type::Int) => Ok(()),
+        (&Type::Float, &Type::Float) => Ok(()),
+        (&Type::Fun(ref t1s, ref t1cod), &Type::Fun(ref t2s, ref t2cod)) => {
             unify_seq!(t1s, t2s);
             invoke!(t1cod, t2cod)
         },
-        (Type::Tuple(ref t1s), Type::Tuple(ref t2s)) => {
+        (&Type::Tuple(ref t1s), &Type::Tuple(ref t2s)) => {
             unify_seq!(t1s, t2s);
             Ok(())
         },
-        (Type::Array(ref t1), Type::Array(ref t2)) => invoke!(t1, t2),
-        (Type::Var(ref n1), Type::Var(ref n2)) if n1 == n2 => Ok(()),
-        (Type::Var(ref n1), _) => {
+        (&Type::Array(ref t1), &Type::Array(ref t2)) => invoke!(t1, t2),
+        (&Type::Var(ref n1), &Type::Var(ref n2)) if n1 == n2 => Ok(()),
+        (&Type::Var(ref n1), _) => {
             if let Some(t1sub) = tyenv.get(n1).cloned() {
                 invoke!(&t1sub, t2)
             } else {
@@ -167,7 +167,7 @@ fn unify(t1: &Type, t2: &Type,
                 Ok(())
             }
         },
-        (_, Type::Var(_)) => invoke!(t2, t1),
+        (_, &Type::Var(_)) => invoke!(t2, t1),
         _ => Err(TypingError::Unify(t1.clone(), t2.clone())),
     }
 }
