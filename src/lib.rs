@@ -15,3 +15,4 @@ pub mod elim;
 pub mod const_fold;
 pub mod inline;
 pub mod closure;
+pub mod x86;
