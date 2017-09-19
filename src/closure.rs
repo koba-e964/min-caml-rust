@@ -1,4 +1,5 @@
 use ordered_float::OrderedFloat;
+use id;
 use syntax::{IntBin, FloatBin, CompBin, Type};
 use k_normal::{KNormal, KFundef};
 use std::collections::{HashMap, HashSet};
@@ -24,17 +25,17 @@ pub enum Closure {
     Var(String),
     MakeCls(String, Type, Cls, Box<Closure>),
     AppCls(String, Box<[String]>),
-    AppDir(String, Box<[String]>),
+    AppDir(id::L, Box<[String]>),
     Tuple(Box<[String]>),
     LetTuple(Box<[(String, Type)]>, String, Box<Closure>),
     Get(String, String),
     Put(String, String, String),
-    ExtArray(String),
+    ExtArray(id::L),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Fundef {
-    pub name: (String, Type),
+    pub name: (id::L, Type),
     pub args: Box<[(String, Type)]>,
     pub formal_fv: Box<[(String, Type)]>,
     pub body: Box<Closure>,
@@ -119,7 +120,7 @@ impl Closure {
                 }
                 e.fmt2(f, level)
             },
-            AppDir(ref func, ref args) => {
+            AppDir(id::L(ref func), ref args) => {
                 write!(f, "{}", func)?;
                 for v in args.iter() {
                     write!(f, " {}", v)?;
@@ -161,7 +162,7 @@ impl Closure {
                 write!(f, "{}.({})", x, y),
             Put(ref x, ref y, ref z) =>
                 write!(f, "{}.({}) <- {}", x, y, z),
-            ExtArray(ref a) => write!(f, "(extarr:{})", a),
+            ExtArray(id::L(ref a)) => write!(f, "(extarr:{})", a),
         }
     }
 }
@@ -174,7 +175,7 @@ impl fmt::Display for Closure {
 
 impl fmt::Display for Fundef {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let Fundef { name: (ref x, ref t), args: ref yts, body: ref e1,
+        let Fundef { name: (id::L(ref x), ref t), args: ref yts, body: ref e1,
                      formal_fv: ref fv } = *self;
         write!(f, "define ({}: {})", x, t)?;
         for &(ref y, ref t) in yts.iter() {
@@ -296,7 +297,7 @@ fn g(env: &HashMap<String, Type>, known: &HashSet<String>,
             };
             let zs: Vec<String> = (&zs - &build_set!(x)).into_iter().collect();
             let zts: Vec<(String, Type)> = zs.iter().map(|&ref z| (z.clone(), env.get(z).unwrap().clone())).collect();
-            toplevel.push(Fundef { name: (x.clone(), t.clone()),
+            toplevel.push(Fundef { name: (id::L(x.clone()), t.clone()),
                                    args: yts,
                                    formal_fv: zts.into_boxed_slice(),
                                    body: Box::new(e1p) });
@@ -312,7 +313,7 @@ fn g(env: &HashMap<String, Type>, known: &HashSet<String>,
         },
         KNormal::App(x, ys) => {
             if known.contains(&x) {
-                AppDir(x, ys)
+                AppDir(id::L(x), ys)
             } else {
                 AppCls(x, ys)
             }
@@ -327,8 +328,9 @@ fn g(env: &HashMap<String, Type>, known: &HashSet<String>,
         },
         KNormal::Get(x, y) => Get(x, y),
         KNormal::Put(x, y, z) => Put(x, y, z),
-        KNormal::ExtArray(x) => ExtArray(x),
-        KNormal::ExtFunApp(x, ys) => AppDir(format!("min_caml_{}", x), ys),
+        KNormal::ExtArray(x) => ExtArray(id::L(x)),
+        KNormal::ExtFunApp(x, ys) =>
+            AppDir(id::L(format!("min_caml_{}", x)), ys),
     }
 }
 

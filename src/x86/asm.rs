@@ -1,4 +1,5 @@
 use syntax::{IntBin, FloatBin, Type};
+use id;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum IdOrImm {
@@ -30,7 +31,7 @@ pub enum FCompBin {
 pub enum Exp {
     Nop,
     Set(i32),
-    SetL(String),
+    SetL(id::L),
     Mov(String),
     Neg(String),
     IntOp(IntBin, String, IdOrImm),
@@ -46,19 +47,19 @@ pub enum Exp {
     IfFComp(FCompBin, String, IdOrImm, Box<Exp>, Box<Exp>),
     /* Closure address, integer arguments float arguments */
     CallCls(String, Box<[String]>, Box<[String]>),
-    CallDir(String, Box<[String]>, Box<[String]>),
+    CallDir(id::L, Box<[String]>, Box<[String]>),
     Save(String, String),
     Restore(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Fundef {
-    name: String,
+    name: id::L,
     args: Box<[String]>,
     fargs: Box<[String]>,
     body: Asm,
     ret: Type,
 }
 
-pub struct Prog(Box<[(String, f64)]>, Box<[Fundef]>, Asm);
+pub struct Prog(Box<[(id::L, f64)]>, Box<[Fundef]>, Asm);
 

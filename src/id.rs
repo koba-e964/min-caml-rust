@@ -1,5 +1,9 @@
 use syntax::Type;
 
+/// Top-level labels. Used after closure-transformation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct L(pub String);
+
 pub struct IdGen {
     x: usize,
 }
