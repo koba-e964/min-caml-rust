@@ -340,3 +340,55 @@ pub fn f(e: KNormal) -> Prog {
     let e = g(&HashMap::new(), &HashSet::new(), e, &mut toplevel);
     Prog(toplevel.into_boxed_slice(), e)
 }
+
+#[cfg(test)]
+mod tests {
+    use closure::*;
+    #[test]
+    fn test_g_if() {
+        let known = HashSet::new();
+        let mut toplevel = Vec::new();
+        // IfComp(Eq, x, x, y, z)
+        // ==> IfComp(Eq, x, x, y, z)
+        let x = || "x".to_string();
+        let y = || "y".to_string();
+        let z = || "z".to_string();
+        let env = vec![(x(), Type::Int),
+                       (y(), Type::Int),
+                       (z(), Type::Int)].into_iter().collect();
+        let expr = KNormal::IfComp(CompBin::Eq,
+                                   x(), x(),
+                                   Box::new(KNormal::Var(y())),
+                                   Box::new(KNormal::Var(z())));
+        assert_eq!(g(&env, &known, expr, &mut toplevel),
+                   Closure::IfComp(CompBin::Eq,
+                                   x(), x(),
+                                   Box::new(Closure::Var(y())),
+                                   Box::new(Closure::Var(z()))));
+    }
+    #[test]
+    fn test_g_appdir() {
+        let known = HashSet::new();
+        let mut toplevel = Vec::new();
+        // LetRec({(f,Fun([Int],Int)),[(x,Int)],Var(x)}, App(f, [y]))
+        // ==> AppDir(L(f), y)
+        let x = || "x".to_string();
+        let y = || "y".to_string();
+        let ff = || "f".to_string();
+        let env = vec![(y(), Type::Int)].into_iter().collect();
+        let expr = KNormal::LetRec(KFundef {
+            name: (ff(), Type::Fun(Box::new([Type::Int]), Box::new(Type::Int))),
+            args: Box::new([(x(), Type::Int)]),
+            body: Box::new(KNormal::Var(x())),
+        },
+                                   Box::new(KNormal::App(ff(), Box::new([y()]))));
+        assert_eq!(g(&env, &known, expr, &mut toplevel),
+                   Closure::AppDir(id::L(ff()), Box::new([y()])));
+        assert_eq!(toplevel, vec![Fundef {
+            name: (id::L(ff()), Type::Fun(Box::new([Type::Int]), Box::new(Type::Int))),
+            args: Box::new([(x(), Type::Int)]),
+            formal_fv: Box::new([]),
+            body: Box::new(Closure::Var(x())),
+        }]);
+    }
+}
