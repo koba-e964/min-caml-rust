@@ -65,18 +65,18 @@ pub struct Fundef {
 
 pub struct Prog(Box<[(id::L, f64)]>, Box<[Fundef]>, Asm);
 
-fn fletd(x: String, e1: Exp, e2: Asm) -> Asm {
+pub fn fletd(x: String, e1: Exp, e2: Asm) -> Asm {
     Asm::Let(x, Type::Float, e1, Box::new(e2))
 }
 
-fn seq(id_gen: &mut id::IdGen, e1: Exp, e2: Asm) -> Asm {
+pub fn seq(id_gen: &mut id::IdGen, e1: Exp, e2: Asm) -> Asm {
     let id = id_gen.gen_tmp(&Type::Unit);
     Asm::Let(id, Type::Unit, e1, Box::new(e2))
 }
 
 const REGS: [&str; 6] = ["%eax", "%ebx", "%ecx", "%edx", "%esi", "%edi"];
 
-fn fregs() -> Vec<String> {
+pub fn fregs() -> Vec<String> {
     let mut res = vec!["".to_string(); 8];
     for i in 0 .. 8 {
         res[i] = format!("%xmm{}", i);
@@ -85,7 +85,7 @@ fn fregs() -> Vec<String> {
 }
 
 /// closure address (caml2html: sparcasm_regcl)
-fn reg_cl() -> &'static str {
+pub fn reg_cl() -> &'static str {
     REGS[REGS.len() - 1]
 }
 
@@ -170,7 +170,7 @@ pub fn concat(e1: Asm, x: String, t: Type, e2: Asm) -> Asm {
     }
 }
 
-fn align(i: i32) -> i32 {
+pub fn align(i: i32) -> i32 {
     if i % 8 == 0 {
         i
     } else {
