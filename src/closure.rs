@@ -204,13 +204,6 @@ impl fmt::Display for Prog {
     }
 }
 
-macro_rules! build_set {
-    ($($x:expr),*) => ({
-        let mut h = HashSet::new();
-        $(h.insert($x.clone());)*
-            h
-    })
-}
 fn fv(e: &Closure) -> HashSet<String> {
     use self::Closure::*;
     macro_rules! invoke {

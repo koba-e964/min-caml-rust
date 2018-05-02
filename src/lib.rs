@@ -3,6 +3,8 @@ extern crate nom;
 extern crate ordered_float;
 extern crate lazy_static;
 
+#[macro_use]
+mod util;
 pub mod syntax;
 pub mod parser;
 pub mod id;
@@ -15,6 +17,4 @@ pub mod elim;
 pub mod const_fold;
 pub mod inline;
 pub mod closure;
-#[macro_use]
-mod util;
 pub mod x86;

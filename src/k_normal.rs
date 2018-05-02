@@ -177,13 +177,6 @@ pub fn fv(e: &KNormal) -> HashSet<String> {
     macro_rules! invoke {
         ($e:expr) => (fv($e));
     }
-    macro_rules! build_set {
-        ($($x:expr),*) => ({
-            let mut h = HashSet::new();
-            $(h.insert($x.clone());)*
-            h
-        })
-    }
     match *e {
         KNormal::Unit | KNormal::Int(_) |
         KNormal::Float(_) | KNormal::ExtArray(_) => HashSet::new(),
