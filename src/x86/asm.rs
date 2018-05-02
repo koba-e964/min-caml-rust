@@ -63,7 +63,7 @@ pub struct Fundef {
     ret: Type,
 }
 
-pub struct Prog(Box<[(id::L, f64)]>, Box<[Fundef]>, Asm);
+pub struct Prog(pub Box<[(id::L, f64)]>, pub Box<[Fundef]>, pub Asm);
 
 pub fn fletd(x: String, e1: Exp, e2: Asm) -> Asm {
     Asm::Let(x, Type::Float, e1, Box::new(e2))

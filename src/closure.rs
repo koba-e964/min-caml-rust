@@ -42,7 +42,7 @@ pub struct Fundef {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Prog(Box<[Fundef]>, Closure);
+pub struct Prog(pub Box<[Fundef]>, pub Closure);
 
 // Display
 impl Closure {
