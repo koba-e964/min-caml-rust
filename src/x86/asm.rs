@@ -45,8 +45,8 @@ pub enum Exp {
     StDF(String, String, IdOrImm, i32),
     Comment(String),
     /* virtual instructions */
-    IfComp(CompBin, String, IdOrImm, Box<Exp>, Box<Exp>),
-    IfFComp(FCompBin, String, String, Box<Exp>, Box<Exp>),
+    IfComp(CompBin, String, IdOrImm, Box<Asm>, Box<Asm>),
+    IfFComp(FCompBin, String, String, Box<Asm>, Box<Asm>),
     /* Closure address, integer arguments float arguments */
     CallCls(String, Box<[String]>, Box<[String]>),
     CallDir(id::L, Box<[String]>, Box<[String]>),
@@ -112,9 +112,6 @@ fn fv_parameters(ys: &[String], zs: &[String]) -> HashSet<String> {
 }
 
 fn fv_exp(x: &Exp) -> HashSet<String> {
-    macro_rules! invoke {
-        ($e:expr) => (fv_exp($e));
-    }
     match *x {
         Exp::Nop | Exp::Set(_) |
         Exp::SetL(_) | Exp::Comment(_) | Exp::Restore(_) => build_set!(),
@@ -138,14 +135,14 @@ fn fv_exp(x: &Exp) -> HashSet<String> {
             build_set!(x, y),
         Exp::IfComp(_, ref x, ref yp, ref e1, ref e2) => {
             let h = build_set!(x);
-            let s1 = invoke!(e1);
-            let s2 = invoke!(e2);
+            let s1 = fv(e1);
+            let s2 = fv(e2);
             &(&h | &s1) | &(&s2 | &fv_id_or_imm(yp))
         },
         Exp::IfFComp(_, ref x, ref y, ref e1, ref e2) => {
             let h = build_set!(x, y);
-            let s1 = invoke!(e1);
-            let s2 = invoke!(e2);
+            let s1 = fv(e1);
+            let s2 = fv(e2);
             &(&h | &s1) | &s2
         },
         Exp::CallCls(ref x, ref ys, ref zs) =>
