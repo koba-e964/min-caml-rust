@@ -56,13 +56,14 @@ pub enum Exp {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Fundef {
-    name: id::L,
-    args: Box<[String]>,
-    fargs: Box<[String]>,
-    body: Asm,
-    ret: Type,
+    pub name: id::L,
+    pub args: Box<[String]>,
+    pub fargs: Box<[String]>,
+    pub body: Asm,
+    pub ret: Type,
 }
 
+#[derive(Debug, Clone)]
 pub struct Prog(pub Box<[(id::L, f64)]>, pub Box<[Fundef]>, pub Asm);
 
 pub fn fletd(x: String, e1: Exp, e2: Asm) -> Asm {
