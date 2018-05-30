@@ -93,12 +93,23 @@ fn g(data: &mut Vec<(id::L, OrderedFloat<f64>)>, env: &HashMap<String, Type>,
             }
         },
         /*
-        TODO remaining (6):
+        TODO remaining (5):
     MakeCls(String, Type, Cls, Box<Closure>),
-        AppCls(String, Box<[String]>),
          */
+        Closure::AppCls(x, ys) => {
+            let (intargs, floatargs) = separate(
+                &ys.into_vec().into_iter()
+                    .map(|y| {
+                        let ty = env.get(&y).unwrap().clone(); (y, ty)
+                    }).collect::<Vec<_>>());
+            Asm::Ans(Exp::CallCls(x, intargs, floatargs))
+        },
         Closure::AppDir(id::L(x), ys) => {
-            let (intargs, floatargs) = separate(&ys.into_vec().into_iter().map(|y| { let ty = env.get(&y).unwrap().clone(); (y, ty) }).collect::<Vec<_>>());
+            let (intargs, floatargs) = separate(
+                &ys.into_vec().into_iter()
+                    .map(|y| {
+                        let ty = env.get(&y).unwrap().clone(); (y, ty)
+                    }).collect::<Vec<_>>());
             Asm::Ans(Exp::CallDir(id::L(x), intargs, floatargs))
         },
         /*
