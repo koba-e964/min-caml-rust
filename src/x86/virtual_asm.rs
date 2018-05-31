@@ -5,16 +5,21 @@ use id;
 use id::IdGen;
 use closure;
 use closure::Closure;
-use x86::asm::{Asm, CompBin, Exp, FCompBin, IdOrImm, Fundef, Prog, concat};
+use x86::asm;
+use x86::asm::{Asm, CompBin, Exp, FCompBin, IdOrImm, Fundef, Prog};
+use syntax::IntBin;
 use ordered_float::OrderedFloat;
 
-fn classify<T, F1: Fn(T, String) -> T, F2: Fn(T, String, Type) -> T>(xts: Vec<(String, Type)>, init: T, addf: F1, addi: F2) -> T {
+/*
+ * S: State
+ */
+fn classify<S, T, F1: Fn(&mut S, T, String) -> T, F2: Fn(&mut S, T, String, Type) -> T>(state: &mut S, xts: Vec<(String, Type)>, init: T, addf: F1, addi: F2) -> T {
     let mut acc = init;
     for (x, t) in xts {
         acc = match t {
             Type::Unit => acc,
-            Type::Float => addf(acc, x.clone()),
-            _ => addi(acc, x.clone(), t),
+            Type::Float => addf(state, acc, x.clone()),
+            _ => addi(state, acc, x.clone(), t),
         };
     }
     acc
@@ -22,16 +27,16 @@ fn classify<T, F1: Fn(T, String) -> T, F2: Fn(T, String, Type) -> T>(xts: Vec<(S
 
 fn separate(xts: &[(String, Type)]) -> (Box<[String]>, Box<[String]>) {
     let (intargs, floatargs)
-        = classify(xts.to_vec(), (Vec::new(), Vec::new()),
-                   |(intargs, mut floatargs), x| { floatargs.push(x); (intargs, floatargs) },
-                   |(mut intargs, floatargs), x, _| { intargs.push(x); (intargs, floatargs) });
+        = classify(&mut (), xts.to_vec(), (Vec::new(), Vec::new()),
+                   |_, (intargs, mut floatargs), x| { floatargs.push(x); (intargs, floatargs) },
+                   |_, (mut intargs, floatargs), x, _| { intargs.push(x); (intargs, floatargs) });
     (intargs.into_boxed_slice(), floatargs.into_boxed_slice())
-}
+ }
 
-fn expand<T, F1: Fn(String, i32, T) -> T, F2: Fn(String, Type, i32, T) -> T>(xts: &[(String, Type)], init: (i32, T), addf: F1, addi: F2) -> (i32, T) {
-    classify(xts.to_vec(), init,
-             |(offset, acc), x| (offset + 8, addf(x, offset, acc)),
-             |(offset, acc), x, t| (offset + 4, addi(x, t, offset, acc)))
+fn expand<T, F1: Fn(&mut IdGen, String, i32, T) -> T, F2: Fn(&mut IdGen, String, Type, i32, T) -> T>(id_gen: &mut IdGen, xts: &[(String, Type)], init: (i32, T), addf: F1, addi: F2) -> (i32, T) {
+    classify(id_gen, xts.to_vec(), init,
+             |id_gen, (offset, acc), x| (offset + 8, addf(id_gen, x, offset, acc)),
+             |id_gen, (offset, acc), x, t| (offset + 4, addi(id_gen, x, t, offset, acc)))
 }
 
 fn g(data: &mut Vec<(id::L, OrderedFloat<f64>)>, env: &HashMap<String, Type>,
@@ -82,7 +87,7 @@ fn g(data: &mut Vec<(id::L, OrderedFloat<f64>)>, env: &HashMap<String, Type>,
             let mut cp_env = env.clone();
             cp_env.insert(x.clone(), t1.clone());
             let e2p = g(data, &cp_env, *e2, id_gen);
-            concat(*e1p, x, t1, e2p)
+            asm::concat(*e1p, x, t1, e2p)
         },
         Closure::Var(x) => {
             match env.get(&x) {
@@ -92,10 +97,22 @@ fn g(data: &mut Vec<(id::L, OrderedFloat<f64>)>, env: &HashMap<String, Type>,
                 _ => Ans(Mov(x)),
             }
         },
-        /*
-        TODO remaining (5):
-    MakeCls(String, Type, Cls, Box<Closure>),
-         */
+        Closure::MakeCls(x, t, closure::Cls { entry: l, actual_fv: ys }, e2) => {
+            use x86::asm::REG_HP;
+            let mut copied_env = env.clone();
+            copied_env.insert(x.clone(), t.clone());
+            let e2p = g(data, &copied_env, *e2, id_gen);
+            let ys = ys.into_vec().into_iter().map(|y| (y.clone(), env.get(&y).unwrap().clone())).collect::<Vec<_>>();
+            let (offset, store_fv) = expand(id_gen, &ys,
+                                            (4, e2p),
+                                            |id_gen, y, offset, store_fv| asm::seq(id_gen, Exp::StDF(y, x.clone(), IdOrImm::C(offset), 1), store_fv),
+                                            |id_gen, y, _, offset, store_fv| asm::seq(id_gen, Exp::St(y, x.clone(), IdOrImm::C(offset), 1), store_fv));
+            let z = id_gen.gen_id("l");
+            Asm::Let(x.clone(), t, Exp::Mov(REG_HP.to_string()),
+                Box::new(Asm::Let(REG_HP.to_string(), Type::Int, Exp::IntOp(IntBin::Add, REG_HP.to_string(), IdOrImm::C(asm::align(offset))),
+                             Box::new(Let(z.clone(), Type::Int, Exp::SetL(l),
+                                          Box::new(asm::seq(id_gen, Exp::St(z, x.clone(), IdOrImm::C(0), 1), store_fv)))))))
+        },
         Closure::AppCls(x, ys) => {
             let (intargs, floatargs) = separate(
                 &ys.into_vec().into_iter()
@@ -113,6 +130,7 @@ fn g(data: &mut Vec<(id::L, OrderedFloat<f64>)>, env: &HashMap<String, Type>,
             Asm::Ans(Exp::CallDir(id::L(x), intargs, floatargs))
         },
         /*
+        TODO remaining (5):
     Tuple(Box<[String]>),
     LetTuple(Box<[(String, Type)]>, String, Box<Closure>),
     Get(String, String),
@@ -136,9 +154,10 @@ fn h(data: &mut Vec<(id::L, OrderedFloat<f64>)>,
         inner_env.insert(y.clone(), t.clone());
     }
     inner_env.insert(x.clone(), t.clone());
-    let (_offset, load) = expand(&zts, (4, g(data, &inner_env, *e, id_gen)),
-                                |z, offset, load| ::x86::asm::fletd(z, Exp::LdDF(x.clone(), IdOrImm::C(offset), 1), load),
-                                |z, t, offset, load| Asm::Let(z, t, Exp::Ld(x.clone(), IdOrImm::C(offset), 1), Box::new(load)));
+    let inner_e = g(data, &inner_env, *e, id_gen);
+    let (_offset, load) = expand(id_gen, &zts, (4, inner_e),
+                                |_, z, offset, load| ::x86::asm::fletd(z, Exp::LdDF(x.clone(), IdOrImm::C(offset), 1), load),
+                                |_, z, t, offset, load| Asm::Let(z, t, Exp::Ld(x.clone(), IdOrImm::C(offset), 1), Box::new(load)));
     match t {
         Type::Fun(_, t2) => Fundef { name: id::L(x), args: intargs, fargs: floatargs, body: load, ret: *t2 },
         _ => unreachable!(),

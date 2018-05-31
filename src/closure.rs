@@ -7,7 +7,7 @@ use std::fmt;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Cls {
-    pub entry: String,
+    pub entry: id::L,
     pub actual_fv: Box<[String]>,
 }
 
@@ -113,8 +113,8 @@ impl Closure {
             Var(ref x) => write!(f, "{}", x),
             MakeCls(ref x, ref t, ref cls, ref e) => {
                 write!(f, "MakeCls {}: {} (", x, t)?;
-                let Cls { ref entry, actual_fv: ref fv } = *cls;
-                write!(f, "{} {:?}) in\n", entry, fv)?;
+                let Cls { entry: id::L(ref l), actual_fv: ref fv } = *cls;
+                write!(f, "{} {:?}) in\n", l, fv)?;
                 for _ in 0 .. level {
                     write!(f, " ")?;
                 }
@@ -297,7 +297,7 @@ fn g(env: &HashMap<String, Type>, known: &HashSet<String>,
             let e2p = g(&env_p, known_p, *e2, toplevel);
             if fv(&e2p).contains(&x) {
                 MakeCls(x.clone(), t,
-                        Cls { entry: x, actual_fv: zs.into_boxed_slice() },
+                        Cls { entry: id::L(x), actual_fv: zs.into_boxed_slice() },
                         Box::new(e2p))
             } else {
                 eprintln!("eliminating closure {}", x);
