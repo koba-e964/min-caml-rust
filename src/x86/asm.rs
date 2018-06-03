@@ -1,6 +1,7 @@
 use syntax::{IntBin, FloatBin, Type};
 use id;
 use std::collections::{HashSet};
+use std::fmt;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum IdOrImm {
@@ -65,6 +66,66 @@ pub struct Fundef {
 
 #[derive(Debug, Clone)]
 pub struct Prog(pub Box<[(id::L, f64)]>, pub Box<[Fundef]>, pub Asm);
+
+// Display
+impl Asm {
+    fn fmt2(&self, f: &mut fmt::Formatter, level: usize) -> fmt::Result {
+        match self {
+            &Asm::Ans(ref e) => write!(f, "ret {:?}", e),
+            &Asm::Let(ref x, ref t, ref e1, ref e2) => {
+                write!(f, "let {}: {} = {} in\n", x, t, e1)?;
+                for _ in 0 .. level {
+                    write!(f, " ")?;
+                }
+                write!(f, "{}", e2)
+            },
+        }
+    }
+}
+impl Exp {
+    fn fmt2(&self, f: &mut fmt::Formatter, level: usize) -> fmt::Result {
+        // TODO
+        write!(f, "{:?}", self)
+    }
+}
+impl fmt::Display for Asm {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.fmt2(f, 0)
+    }
+}
+impl fmt::Display for Exp {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.fmt2(f, 0)
+    }
+}
+impl fmt::Display for Fundef {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let &Fundef { name: id::L(ref name), ref args, ref fargs, ref body, ref ret }
+        = self;
+        write!(f, "asm-define {}", name)?;
+        for y in args.iter() {
+            write!(f, " ({}: intptr)", y)?;
+        }
+        for y in fargs.iter() {
+            write!(f, " ({}: float)", y)?;
+        }
+        write!(f, ":{} {{\n  ", ret)?;
+        body.fmt2(f, 2)?;
+        write!(f, "\n}}")
+    }
+}
+impl fmt::Display for Prog {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let &Prog(ref data, ref fundefs, ref e) = self;
+        for &(id::L(ref name), ref value) in data.iter() {
+            write!(f, "{} => {}\n", name, value)?;
+        }
+        for fundef in fundefs.iter() {
+            write!(f, "{}\n", fundef)?;
+        }
+        write!(f, "{}", e)
+    }
+}
 
 pub fn fletd(x: String, e1: Exp, e2: Asm) -> Asm {
     Asm::Let(x, Type::Float, e1, Box::new(e2))

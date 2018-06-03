@@ -151,13 +151,13 @@ fn g(data: &mut Vec<(id::L, OrderedFloat<f64>)>, env: &HashMap<String, Type>,
                 copied_env.insert(x.clone(), t.clone());
             }
             let init = (0, g(data, &copied_env, *e2, id_gen));
-            let (offset, load) = expand(
+            let (_, load) = expand(
                 id_gen, &xts, init,
                 /* [XX] a little ad hoc optimization */
-                |id_gen, x, offset, load| if !s.contains(&x) { load } else {
+                |_, x, offset, load| if !s.contains(&x) { load } else {
                     fletd(x, LdDF(y.clone(), IdOrImm::C(offset), 1), load) },
                 /* [XX] a little ad hoc optimization */
-                |id_gen, x, t, offset, load| if !s.contains(&x) { load } else {
+                |_, x, t, offset, load| if !s.contains(&x) { load } else {
                     Let(x, t, Ld(y.clone(), IdOrImm::C(offset), 1), Box::new(load)) });
             load
         },

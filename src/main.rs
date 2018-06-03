@@ -106,5 +106,5 @@ fn run(program: &[u8]) {
     let closure = closure::f(e);
     println!("closure-trans = {}", closure);
     let virtual_asm = x86::virtual_asm::f(closure, &mut id_gen);
-    println!("virtual_asm = {:?}", virtual_asm);
+    println!("virtual_asm = {}", virtual_asm);
 }
