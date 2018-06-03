@@ -129,16 +129,62 @@ fn g(data: &mut Vec<(id::L, OrderedFloat<f64>)>, env: &HashMap<String, Type>,
                     }).collect::<Vec<_>>());
             Asm::Ans(Exp::CallDir(id::L(x), intargs, floatargs))
         },
-        /*
-        TODO remaining (5):
-    Tuple(Box<[String]>),
-    LetTuple(Box<[(String, Type)]>, String, Box<Closure>),
-    Get(String, String),
-    Put(String, String, String),
-         */
+        Closure::Tuple(xs) => {
+            use x86::asm::{REG_HP,align};
+            let y = id_gen.gen_id("t");
+            let xs_with_type = xs.iter().map(|x| { let tmp = env.get(x).unwrap(); (x.clone(), tmp.clone()) }).collect::<Vec<_>>();
+            let (offset, store) = expand(id_gen, &xs_with_type,
+                                         (0, Ans(Mov(y.clone()))),
+                                         |id_gen, x, offset, store| asm::seq(id_gen, StDF(x, y.clone(), IdOrImm::C(offset), 1), store),
+                                         |id_gen, x, _, offset, store| asm::seq(id_gen, St(x, y.clone(), IdOrImm::C(offset), 1), store));
+            Let(y, Type::Tuple(xs.iter().map(|x| env.get(x).unwrap().clone()).collect::<Vec<_>>().into_boxed_slice()),
+                Mov(REG_HP.to_string()),
+                Box::new(Let(REG_HP.to_string(), Type::Int,
+                             IntOp(IntBin::Add, REG_HP.to_string(), IdOrImm::C(align(offset))),
+                             Box::new(store))))
+        },
+        Closure::LetTuple(xts, y, e2) => {
+            use self::asm::fletd;
+            let s = closure::fv(&e2);
+            let mut copied_env = env.clone();
+            for &(ref x, ref t) in xts.iter() {
+                copied_env.insert(x.clone(), t.clone());
+            }
+            let init = (0, g(data, &copied_env, *e2, id_gen));
+            let (offset, load) = expand(
+                id_gen, &xts, init,
+                /* [XX] a little ad hoc optimization */
+                |id_gen, x, offset, load| if !s.contains(&x) { load } else {
+                    fletd(x, LdDF(y.clone(), IdOrImm::C(offset), 1), load) },
+                /* [XX] a little ad hoc optimization */
+                |id_gen, x, t, offset, load| if !s.contains(&x) { load } else {
+                    Let(x, t, Ld(y.clone(), IdOrImm::C(offset), 1), Box::new(load)) });
+            load
+        },
+        Closure::Get(x, y) =>
+            match env.get(&x) {
+                Some(&Type::Array(ref ty)) => match ty as &Type {
+                    &Type::Unit => Asm::Ans(Exp::Nop),
+                    &Type::Float =>
+                        Asm::Ans(Exp::LdDF(x, IdOrImm::V(y), 8)),
+                    _ =>
+                        Asm::Ans(Exp::Ld(x, IdOrImm::V(y), 4)),
+                },
+                _ => panic!("invalid type for an array (Get)"),
+            }
+        Closure::Put(x, y, z) =>
+            match env.get(&x) {
+                Some(&Type::Array(ref ty)) => match ty as &Type {
+                    &Type::Unit => Asm::Ans(Exp::Nop),
+                    &Type::Float =>
+                        Asm::Ans(Exp::StDF(z, x, IdOrImm::V(y), 8)),
+                    _ =>
+                        Asm::Ans(Exp::St(z, x, IdOrImm::V(y), 4)),
+                },
+                _ => panic!("invalid type for an array (Put)"),
+            }
         Closure::ExtArray(id::L(x)) =>
             Ans(SetL(id::L(format!("min_caml_{}", x)))),
-        _ => panic!(),
     }
 }
 

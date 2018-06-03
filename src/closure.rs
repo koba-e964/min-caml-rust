@@ -204,7 +204,8 @@ impl fmt::Display for Prog {
     }
 }
 
-fn fv(e: &Closure) -> HashSet<String> {
+/// Used in x86/virtual_asm.rs
+pub fn fv(e: &Closure) -> HashSet<String> {
     use self::Closure::*;
     macro_rules! invoke {
         ($e:expr) => (fv($e));
