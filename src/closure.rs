@@ -75,16 +75,16 @@ impl Closure {
                     self::CompBin::Eq => "=",
                     self::CompBin::LE => "<=",
                 };
-                write!(f, "if {} {} {} then\n", x, op_str, y)?;
+                writeln!(f, "if {} {} {} then", x, op_str, y)?;
                 for _ in 0 .. level + 2 {
                     write!(f, " ")?;
                 }
                 e1.fmt2(f, level + 2)?;
-                write!(f, "\n")?;
+                writeln!(f)?;
                 for _ in 0 .. level {
                     write!(f, " ")?;
                 }
-                write!(f, "else\n")?;
+                writeln!(f, "else")?;
                 for _ in 0 .. level + 2 {
                     write!(f, " ")?;
                 }
@@ -95,7 +95,7 @@ impl Closure {
                     if x.len() >= 6 && &x[0..6] == "_dummy" {
                         // this let expression is actually "e1; e2"
                         e1.fmt2(f, level)?;
-                        write!(f, ";\n")?;
+                        writeln!(f, ";")?;
                         for _ in 0 .. level {
                             write!(f, " ")?;
                         }
@@ -104,7 +104,7 @@ impl Closure {
                 }
                 write!(f, "let {}: {} = ", x, t)?;
                 e1.fmt2(f, level)?;
-                write!(f, " in\n")?;
+                writeln!(f, " in")?;
                 for _ in 0 .. level {
                     write!(f, " ")?;
                 }
@@ -114,7 +114,7 @@ impl Closure {
             MakeCls(x, t, cls, e) => {
                 write!(f, "MakeCls {}: {} (", x, t)?;
                 let Cls { entry: id::L(l), actual_fv: fv } = cls;
-                write!(f, "{} {:?}) in\n", l, fv)?;
+                writeln!(f, "{} {:?}) in", l, fv)?;
                 for _ in 0 .. level {
                     write!(f, " ")?;
                 }
@@ -152,7 +152,7 @@ impl Closure {
                         write!(f, ", ")?;
                     }
                 }
-                write!(f, ") = {} in\n", y)?;
+                writeln!(f, ") = {} in", y)?;
                 for _ in 0 .. level {
                     write!(f, " ")?;
                 }
@@ -187,7 +187,7 @@ impl fmt::Display for Fundef {
                 write!(f, " ({}: {})", x, t)?;
             }
         }
-        write!(f, " {{\n")?;
+        writeln!(f, " {{")?;
         write!(f, "  ")?;
         e1.fmt2(f, 2)?;
         write!(f, "\n}}")
@@ -198,7 +198,7 @@ impl fmt::Display for Prog {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let Prog(fundefs, e) = self;
         for fundef in fundefs.iter() {
-            write!(f, "{}\n", fundef)?;
+            writeln!(f, "{}", fundef)?;
         }
         write!(f, "{}", e)
     }

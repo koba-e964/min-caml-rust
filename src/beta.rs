@@ -50,9 +50,9 @@ fn g(env: &HashMap<String, String>, e: KNormal) -> KNormal {
         },
         Var(x) => Var(find!(x)),
         LetRec(KFundef { name: xt, args: mut yts, body: e1 }, e2) => {
-            for i in 0 .. yts.len() {
-                let entry = std::mem::replace(&mut yts[i].0, "".to_string());
-                yts[i].0 = find!(entry);
+            for item in yts.iter_mut() {
+                let entry = std::mem::replace(&mut item.0, "".to_string());
+                item.0 = find!(entry);
             }
             LetRec(KFundef { name: xt, args: yts,
                             body: invoke!(e1) },

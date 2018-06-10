@@ -4,6 +4,8 @@ use k_normal::{KNormal, KFundef, fv};
 use syntax::Type;
 use id::IdGen;
 
+type TypeEnv = HashMap<String, (Box<[(String, Type)]>, KNormal)>;
+
 fn is_recursive(KFundef { name: (x, _t), args: _yts, body: e1 }: &KFundef)
                 -> bool {
     fv(e1).contains(x)
@@ -22,7 +24,7 @@ pub fn size(e: &KNormal) -> usize {
 }
 
 
-fn g(env: &HashMap<String, (Box<[(String, Type)]>, KNormal)>, e: KNormal, id_gen: &mut IdGen,
+fn g(env: &TypeEnv, e: KNormal, id_gen: &mut IdGen,
      inline_threshold: usize)
      -> KNormal {
     use self::KNormal::*;

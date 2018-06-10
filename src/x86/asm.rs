@@ -78,7 +78,7 @@ impl Asm {
             Asm::Let(x, t, e1, e2) => {
                 write!(f, "let {}: {} = ", x, t)?;
                 e1.fmt2(f, level)?;
-                write!(f, " in\n")?;
+                writeln!(f, " in")?;
                 for _ in 0 .. level {
                     write!(f, " ")?;
                 }
@@ -126,16 +126,16 @@ impl Exp {
                     CompBin::LE => "le",
                     CompBin::GE => "ge",
                 };
-                write!(f, "if {} {} {} then\n", op_string, x, y)?;
+                writeln!(f, "if {} {} {} then", op_string, x, y)?;
                 for _ in 0 .. level + 2 {
                     write!(f, " ")?;
                 }
                 e1.fmt2(f, level + 2)?;
-                write!(f, "\n")?;
+                writeln!(f)?;
                 for _ in 0 .. level {
                     write!(f, " ")?;
                 }
-                write!(f, "else\n")?;
+                writeln!(f, "else")?;
                 for _ in 0 .. level + 2 {
                     write!(f, " ")?;
                 }
@@ -146,16 +146,16 @@ impl Exp {
                     FCompBin::Eq => "feq",
                     FCompBin::LE => "fle",
                 };
-                write!(f, "if {} {} {} then\n", op_string, x, y)?;
+                writeln!(f, "if {} {} {} then", op_string, x, y)?;
                 for _ in 0 .. level + 2 {
                     write!(f, " ")?;
                 }
                 e1.fmt2(f, level + 2)?;
-                write!(f, "\n")?;
+                writeln!(f)?;
                 for _ in 0 .. level {
                     write!(f, " ")?;
                 }
-                write!(f, "else\n")?;
+                writeln!(f, "else")?;
                 for _ in 0 .. level + 2 {
                     write!(f, " ")?;
                 }
@@ -226,10 +226,10 @@ impl fmt::Display for Prog {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let Prog(data, fundefs, e) = self;
         for (id::L(name), value) in data.iter() {
-            write!(f, "{} => {}\n", name, value)?;
+            writeln!(f, "{} => {}", name, value)?;
         }
         for fundef in fundefs.iter() {
-            write!(f, "{}\n", fundef)?;
+            writeln!(f, "{}", fundef)?;
         }
         write!(f, "{}", e)
     }
@@ -248,8 +248,8 @@ const REGS: [&str; 6] = ["%eax", "%ebx", "%ecx", "%edx", "%esi", "%edi"];
 
 pub fn fregs() -> Vec<String> {
     let mut res = vec!["".to_string(); 8];
-    for i in 0 .. 8 {
-        res[i] = format!("%xmm{}", i);
+    for (i, item) in res.iter_mut().enumerate() {
+        *item = format!("%xmm{}", i);
     }
     res
 }

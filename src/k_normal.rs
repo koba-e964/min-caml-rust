@@ -64,16 +64,16 @@ impl KNormal {
                     self::CompBin::Eq => "=",
                     self::CompBin::LE => "<=",
                 };
-                write!(f, "if {} {} {} then\n", x, op_str, y)?;
+                writeln!(f, "if {} {} {} then", x, op_str, y)?;
                 for _ in 0 .. level + 2 {
                     write!(f, " ")?;
                 }
                 e1.fmt2(f, level + 2)?;
-                write!(f, "\n")?;
+                writeln!(f)?;
                 for _ in 0 .. level {
                     write!(f, " ")?;
                 }
-                write!(f, "else\n")?;
+                writeln!(f, "else")?;
                 for _ in 0 .. level + 2 {
                     write!(f, " ")?;
                 }
@@ -84,7 +84,7 @@ impl KNormal {
                     if x.len() >= 6 && &x[0..6] == "_dummy" {
                         // this let expression is actually "e1; e2"
                         e1.fmt2(f, level)?;
-                        write!(f, ";\n")?;
+                        writeln!(f, ";")?;
                         for _ in 0 .. level {
                             write!(f, " ")?;
                         }
@@ -93,7 +93,7 @@ impl KNormal {
                 }
                 write!(f, "let {}: {} = ", x, t)?;
                 e1.fmt2(f, level)?;
-                write!(f, " in\n")?;
+                writeln!(f, " in")?;
                 for _ in 0 .. level {
                     write!(f, " ")?;
                 }
@@ -103,15 +103,15 @@ impl KNormal {
             LetRec(KFundef { name: (x, t), args: yts, body: e1 },
                    e2) => {
                 write!(f, "let rec ({}: {})", x, t)?;
-                for i in 0 .. yts.len() {
-                    write!(f, " ({}: {})", yts[i].0, yts[i].1)?;
+                for arg in yts.iter() {
+                    write!(f, " ({}: {})", arg.0, arg.1)?;
                 }
-                write!(f, " =\n")?;
+                writeln!(f, " =")?;
                 for _ in 0 .. level + 1 {
                     write!(f, " ")?;
                 }
                 e1.fmt2(f, level + 1)?;
-                write!(f, " in\n")?;
+                writeln!(f, " in")?;
                 for _ in 0 .. level {
                     write!(f, " ")?;
                 }
@@ -142,7 +142,7 @@ impl KNormal {
                         write!(f, ", ")?;
                     }
                 }
-                write!(f, ") = {} in\n", y)?;
+                writeln!(f, ") = {} in", y)?;
                 for _ in 0 .. level {
                     write!(f, " ")?;
                 }

@@ -53,10 +53,10 @@ pub fn g(env: &HashMap<String, String>, e: KNormal, id_gen: &mut IdGen) -> KNorm
             let xname = id_gen.gen_id(&x);
             cp_env.insert(x, xname.clone());
             let mut cp_env_body = cp_env.clone();
-            for i in 0 .. yts.len() {
-                let new_name = id_gen.gen_id(&yts[i].0);
-                cp_env_body.insert(yts[i].0.clone(), new_name.clone());
-                yts[i].0 = new_name;
+            for item in yts.iter_mut() {
+                let new_name = id_gen.gen_id(&item.0);
+                cp_env_body.insert(item.0.clone(), new_name.clone());
+                item.0 = new_name;
             }
             LetRec(KFundef { name: (xname, t), args: yts,
                             body: Box::new(g(&cp_env_body, *e1, id_gen)) },
@@ -72,10 +72,10 @@ pub fn g(env: &HashMap<String, String>, e: KNormal, id_gen: &mut IdGen) -> KNorm
         },
         LetTuple(mut xts, y, e) => {
             let mut cp_env = env.clone();
-            for i in 0 .. xts.len() {
-                let entry = std::mem::replace(&mut xts[i].0, "".to_string());
+            for item in xts.iter_mut() {
+                let entry = std::mem::replace(&mut item.0, "".to_string());
                 let newx = id_gen.gen_id(&entry);
-                xts[i].0 = newx.clone();
+                item.0 = newx.clone();
                 cp_env.insert(entry, newx);
             }
             LetTuple(xts, find!(y), Box::new(g(&cp_env, *e, id_gen)))

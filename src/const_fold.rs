@@ -44,7 +44,7 @@ fn findi(x: &str, env: &ConstEnv) -> Option<i64> {
 fn findf(x: &str, env: &ConstEnv) -> Option<f64> {
     use self::Const::*;
     match env.get(x) {
-        Some(FloatConst(v)) => Some((*v).into()),
+        Some(FloatConst(v)) => Some(*v),
         _ => None,
     }
 }
@@ -66,8 +66,8 @@ fn value_to_expr(x: Const, id_gen: &mut IdGen) -> (KNormal, Type) {
             let mut tvar = Vec::new();
             let mut expr = Vec::new();
             let mut tys = Vec::new();
-            for i in 0 .. v.len() {
-                let (e, ty) = value_to_expr(v[i].clone(), id_gen);
+            for elem in v.iter() {
+                let (e, ty) = value_to_expr(elem.clone(), id_gen);
                 let tmp = id_gen.gen_tmp(&ty);
                 tvar.push(tmp);
                 expr.push(e);
@@ -94,9 +94,7 @@ fn g(env: &mut ConstEnv, e: KNormal, id_gen: &mut IdGen) -> KNormal {
         ($e: expr) => { Box::new(g(env, *$e, id_gen)) }
     }
     match e {
-        Unit => Unit,
-        Int(i) => Int(i),
-        Float(f) => Float(f),
+        Unit | Int(_) | Float(_) => e,
         Neg(x) =>
             match findi(&x, env) {
                 Some(v) => Int(-v),

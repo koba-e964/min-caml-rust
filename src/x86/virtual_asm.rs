@@ -65,14 +65,14 @@ fn g(data: &mut Vec<(id::L, OrderedFloat<f64>)>, env: &HashMap<String, Type>,
         Closure::FloatBin(op, x, y) => Ans(FloatOp(op, x, y)),
         Closure::IfComp(op, x, y, e1, e2) => {
             match env.get(&x) {
-                Some(&Type::Bool) | Some(&Type::Int) => {
+                Some(Type::Bool) | Some(Type::Int) => {
                     let nop = match op {
                         syntax::CompBin::Eq => CompBin::Eq,
                         syntax::CompBin::LE => CompBin::LE,
                     };
                     Ans(IfComp(nop, x, IdOrImm::V(y), invoke!(e1), invoke!(e2)))
                 },
-                Some(&Type::Float) => {
+                Some(Type::Float) => {
                     let nop = match op {
                         syntax::CompBin::Eq => FCompBin::Eq,
                         syntax::CompBin::LE => FCompBin::LE,
@@ -91,8 +91,8 @@ fn g(data: &mut Vec<(id::L, OrderedFloat<f64>)>, env: &HashMap<String, Type>,
         },
         Closure::Var(x) => {
             match env.get(&x) {
-                Some(&Type::Unit) => Ans(Nop),
-                Some(&Type::Float) => Ans(FMovD(x)),
+                Some(Type::Unit) => Ans(Nop),
+                Some(Type::Float) => Ans(FMovD(x)),
                 None => unreachable!(),
                 _ => Ans(Mov(x)),
             }
