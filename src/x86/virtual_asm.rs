@@ -223,3 +223,63 @@ pub fn f(closure::Prog(fundefs, e): closure::Prog, id_gen: &mut IdGen) -> Prog {
         .into_boxed_slice();
     Prog(data, fundefs, e)
 }
+
+#[cfg(test)]
+mod tests {
+    use x86::virtual_asm::*;
+    use closure::*;
+    #[test]
+    fn test_comparison() {
+        use std::collections::HashMap;
+
+        let mut data = Vec::new();
+        let mut env = HashMap::new();
+        let x = || "x".to_string();
+        let y = || "y".to_string();
+        env.insert(x(), Type::Int);
+        env.insert(y(), Type::Int);
+        let e = Closure::IfComp(syntax::CompBin::LE, x(), y(),
+                                Box::new(Closure::Int(3)),
+                                Box::new(Closure::Int(7)));
+        let mut id_gen = IdGen::new();
+        let int_wrapper = |value| Box::new(Asm::Ans(Exp::Set(value)));
+        let expected = Asm::Ans(
+            Exp::IfComp(CompBin::LE, x(), IdOrImm::V(y()),
+                        int_wrapper(3), int_wrapper(7)));
+        assert_eq!(expected, g(&mut data, &env, e, &mut id_gen));
+    }
+    #[test]
+    fn test_make_closure() {
+        use std::collections::HashMap;
+
+        let mut data = Vec::new();
+        let mut env = HashMap::new();
+        let x = || "x".to_string();
+        let y = || "y".to_string();
+        let func = || "f".to_string();
+        let func_type = Type::Fun(Box::new([Type::Int]), Box::new(Type::Int));
+        env.insert(x(), Type::Int);
+        env.insert(y(), Type::Int);
+        let e = Closure::MakeCls(func(),
+                                 func_type.clone(),
+                                 Cls { entry: id::L(func()),
+                                       actual_fv: Box::new([x(), y()]),
+                                 },
+                                 Box::new(Closure::Unit));
+        let mut id_gen = IdGen::new();
+        let expected;
+        {
+            use syntax::IntBin;
+
+            let e5 = Asm::Ans(Exp::Nop);
+            // Note that g() may change its behavior. Temporary variables' names are therefore random.
+            let e4 = Asm::Let("u0".to_string(), Type::Unit, Exp::St(x(), func(), IdOrImm::C(4), 1), Box::new(e5));
+            let e3 = Asm::Let("u1".to_string(), Type::Unit, Exp::St(y(), func(), IdOrImm::C(8), 1), Box::new(e4));
+            let e2 = Asm::Let("u3".to_string(), Type::Unit, Exp::St("l2".to_string(), func(), IdOrImm::C(0), 1), Box::new(e3));
+            let e1 = Asm::Let("l2".to_string(), Type::Int, Exp::SetL(id::L("f".to_string())), Box::new(e2));
+            let e0 = Asm::Let("min_caml_hp".to_string(), Type::Int, Exp::IntOp(IntBin::Add, "min_caml_hp".to_string(), IdOrImm::C(16)), Box::new(e1));
+            expected = Asm::Let(func(), func_type, Exp::Mov("min_caml_hp".to_string()), Box::new(e0));
+        }
+        assert_eq!(expected, g(&mut data, &env, e, &mut id_gen));
+    }
+}
