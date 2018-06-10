@@ -56,7 +56,7 @@ fn main() {
         println!(" usage: ./min-caml-rust [ML FILENAME]");
         return;
     }
-    let ref filename = args[1];
+    let filename = &args[1];
     let path = Path::new(&filename);
     let program = read_from_file(&path).unwrap();
     run(&program);

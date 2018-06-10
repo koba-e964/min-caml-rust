@@ -62,12 +62,12 @@ pub enum Type {
 impl Type {
     fn fmt_sub(&self, f: &mut fmt::Formatter, parens: bool) -> fmt::Result {
         use self::Type::*;
-        match *self {
+        match self {
             Unit => write!(f, "()"),
             Bool => write!(f, "bool"),
             Int => write!(f, "int"),
             Float => write!(f, "float"),
-            Fun(ref argty, ref retty) => {
+            Fun(argty, retty) => {
                 write!(f, "{{")?;
                 for i in 0 .. argty.len() {
                     write!(f, "{}", argty[i])?;
@@ -78,7 +78,7 @@ impl Type {
                 write!(f, "}}")?;
                 write!(f, " -> {}", retty)
             },
-            Tuple(ref xs) => {
+            Tuple(xs) => {
                 if parens {
                     write!(f, "(")?;
                 }
@@ -93,7 +93,7 @@ impl Type {
                 }
                 Ok(())
             },
-            Array(ref x) =>
+            Array(x) =>
                 write!(f, "[{}]", x),
             Var(n) => write!(f, "v{}", n),
         }

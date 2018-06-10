@@ -37,20 +37,20 @@ pub struct KFundef {
 impl KNormal {
     fn fmt2(&self, f: &mut fmt::Formatter, level: usize) -> fmt::Result {
         use self::KNormal::*;
-        match *self {
+        match self {
             Unit => write!(f, "()"),
             Int(v) => write!(f, "{}", v),
             Float(fv) => write!(f, "{}", fv),
-            Neg(ref x) => write!(f, "-{}", x),
-            IntBin(op, ref x, ref y) => {
+            Neg(x) => write!(f, "-{}", x),
+            IntBin(op, x, y) => {
                 let op_str = match op {
                     self::IntBin::Add => "+",
                     self::IntBin::Sub => "-",
                 };
                 write!(f, "{} {} {}", x, op_str, y)
             },
-            FNeg(ref x) => write!(f, "-.{}", x),
-            FloatBin(op, ref x, ref y) => {
+            FNeg(x) => write!(f, "-.{}", x),
+            FloatBin(op, x, y) => {
                 let op_str = match op {
                     self::FloatBin::FAdd => "+.",
                     self::FloatBin::FSub => "-.",
@@ -59,7 +59,7 @@ impl KNormal {
                 };
                 write!(f, "{} {} {}", x, op_str, y)
             },
-            IfComp(op, ref x, ref y, ref e1, ref e2) => {
+            IfComp(op, x, y, e1, e2) => {
                 let op_str = match op {
                     self::CompBin::Eq => "=",
                     self::CompBin::LE => "<=",
@@ -79,7 +79,7 @@ impl KNormal {
                 }
                 e2.fmt2(f, level + 2)
             },
-            Let((ref x, ref t), ref e1, ref e2) => {
+            Let((x, t), e1, e2) => {
                 if let Type::Unit = *t {
                     if x.len() >= 6 && &x[0..6] == "_dummy" {
                         // this let expression is actually "e1; e2"
@@ -99,9 +99,9 @@ impl KNormal {
                 }
                 e2.fmt2(f, level)
             },
-            Var(ref x) => write!(f, "{}", x),
-            LetRec(KFundef { name: (ref x, ref t), args: ref yts, body: ref e1 },
-                   ref e2) => {
+            Var(x) => write!(f, "{}", x),
+            LetRec(KFundef { name: (x, t), args: yts, body: e1 },
+                   e2) => {
                 write!(f, "let rec ({}: {})", x, t)?;
                 for i in 0 .. yts.len() {
                     write!(f, " ({}: {})", yts[i].0, yts[i].1)?;
@@ -117,14 +117,14 @@ impl KNormal {
                 }
                 e2.fmt2(f, level)
             }
-            App(ref func, ref args) => {
+            App(func, args) => {
                 write!(f, "{}", func)?;
                 for v in args.iter() {
                     write!(f, " {}", v)?;
                 }
                 Ok(())
             },
-            Tuple(ref elems) => {
+            Tuple(elems) => {
                 write!(f, "(")?;
                 for i in 0 .. elems.len() {
                     write!(f, "{}", elems[i])?;
@@ -134,7 +134,7 @@ impl KNormal {
                 }
                 write!(f, ")")
             },
-            LetTuple(ref xts, ref y, ref e) => {
+            LetTuple(xts, y, e) => {
                 write!(f, "let (")?;
                 for i in 0 .. xts.len() {
                     write!(f, "{}: {}", xts[i].0, xts[i].1)?;
@@ -148,12 +148,12 @@ impl KNormal {
                 }
                 e.fmt2(f, level)
             },
-            Get(ref x, ref y) =>
+            Get(x, y) =>
                 write!(f, "{}.({})", x, y),
-            Put(ref x, ref y, ref z) =>
+            Put(x, y, z) =>
                 write!(f, "{}.({}) <- {}", x, y, z),
-            ExtArray(ref a) => write!(f, "(extarr:{})", a),
-            ExtFunApp(ref func, ref args) => {
+            ExtArray(a) => write!(f, "(extarr:{})", a),
+            ExtFunApp(func, args) => {
                 write!(f, "(ext:{})", func)?;
                 for v in args.iter() {
                     write!(f, " {}", v)?;
@@ -177,42 +177,42 @@ pub fn fv(e: &KNormal) -> HashSet<String> {
     macro_rules! invoke {
         ($e:expr) => (fv($e));
     }
-    match *e {
+    match e {
         KNormal::Unit | KNormal::Int(_) |
         KNormal::Float(_) | KNormal::ExtArray(_) => HashSet::new(),
-        KNormal::Neg(ref x) | KNormal::FNeg(ref x) => build_set!(x),
-        KNormal::IntBin(_, ref x, ref y) |
-        KNormal::FloatBin(_, ref x, ref y) |
-        KNormal::Get(ref x, ref y) => build_set!(x, y),
-        KNormal::IfComp(_, ref x, ref y, ref e1, ref e2) => {
+        KNormal::Neg(x) | KNormal::FNeg(x) => build_set!(x),
+        KNormal::IntBin(_, x, y) |
+        KNormal::FloatBin(_, x, y) |
+        KNormal::Get(x, y) => build_set!(x, y),
+        KNormal::IfComp(_, x, y, e1, e2) => {
             let h = build_set!(x, y);
             let s1 = invoke!(e1);
             let s2 = invoke!(e2);
             &(&h | &s1) | &s2
         },
-        KNormal::Let((ref x, _), ref e1, ref e2) => {
+        KNormal::Let((x, _), e1, e2) => {
             let s1 = invoke!(e1);
             let s2 = &invoke!(e2) - &build_set!(x);
             &s1 | &s2
         }
-        KNormal::Var(ref x) => build_set!(x),
-        KNormal::LetRec(ref fundef, ref e2) => {
+        KNormal::Var(x) => build_set!(x),
+        KNormal::LetRec(fundef, e2) => {
             let yts = &fundef.args;
             let e1 = &fundef.body;
             let (ref x, _) = fundef.name;
             let zs = &invoke!(e1) - &yts.iter().map(|x| x.0.clone()).collect();
             &(&zs | &invoke!(e2)) - &build_set!(x)
         },
-        KNormal::App(ref x, ref ys) =>
+        KNormal::App(x, ys) =>
             &build_set!(x) | &ys.iter().cloned().collect::<HashSet<_>>(),
-        KNormal::Tuple(ref xs) => xs.iter().cloned().collect(),
-        KNormal::LetTuple(ref xs, ref y, ref e) => {
+        KNormal::Tuple(xs) => xs.iter().cloned().collect(),
+        KNormal::LetTuple(xs, y, e) => {
             let tmp: HashSet<String> = xs.iter().map(|x| x.0.clone())
                 .collect(); // S.of_list (List.map fst xs)
             &build_set!(y) | &(&invoke!(e) - &tmp)
         },
-        KNormal::Put(ref x, ref y, ref z) => build_set!(x, y, z),
-        KNormal::ExtFunApp(_, ref xs) => xs.iter().cloned().collect(),
+        KNormal::Put(x, y, z) => build_set!(x, y, z),
+        KNormal::ExtFunApp(_, xs) => xs.iter().cloned().collect(),
     }
 }
 
@@ -335,7 +335,7 @@ fn g(env: &HashMap<String, Type>, e: Syntax, id_gen: &mut IdGen, extenv: &HashMa
             let mut cp_env = env.clone();
             cp_env.insert(x.clone(), t.clone());
             let (e2p, t2) = g(&cp_env, *e2, id_gen, extenv);
-            for &(ref y, ref yt) in yts.iter() {
+            for (y, yt) in yts.iter() {
                 cp_env.insert(y.clone(), yt.clone());
             }
             let (e1p, _t1) = g(&cp_env, *e1, id_gen, extenv);
@@ -433,7 +433,7 @@ fn g(env: &HashMap<String, Type>, e: Syntax, id_gen: &mut IdGen, extenv: &HashMa
             insert_let_helper!(*e1,
                                move |y| {
                                    let mut cp_env = env.clone();
-                                   for &(ref x, ref t) in xts.iter() {
+                                   for (x, t) in xts.iter() {
                                        cp_env.insert(x.clone(), t.clone());
                                    }
                                    let (e2p, t2) = g(&cp_env, *e2, id_gen,

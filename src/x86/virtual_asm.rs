@@ -147,7 +147,7 @@ fn g(data: &mut Vec<(id::L, OrderedFloat<f64>)>, env: &HashMap<String, Type>,
             use self::asm::fletd;
             let s = closure::fv(&e2);
             let mut copied_env = env.clone();
-            for &(ref x, ref t) in xts.iter() {
+            for (x, t) in xts.iter() {
                 copied_env.insert(x.clone(), t.clone());
             }
             let init = (0, g(data, &copied_env, *e2, id_gen));
@@ -163,9 +163,9 @@ fn g(data: &mut Vec<(id::L, OrderedFloat<f64>)>, env: &HashMap<String, Type>,
         },
         Closure::Get(x, y) =>
             match env.get(&x) {
-                Some(&Type::Array(ref ty)) => match ty as &Type {
-                    &Type::Unit => Asm::Ans(Exp::Nop),
-                    &Type::Float =>
+                Some(Type::Array(ty)) => match ty as &Type {
+                    Type::Unit => Asm::Ans(Exp::Nop),
+                    Type::Float =>
                         Asm::Ans(Exp::LdDF(x, IdOrImm::V(y), 8)),
                     _ =>
                         Asm::Ans(Exp::Ld(x, IdOrImm::V(y), 4)),
@@ -174,9 +174,9 @@ fn g(data: &mut Vec<(id::L, OrderedFloat<f64>)>, env: &HashMap<String, Type>,
             }
         Closure::Put(x, y, z) =>
             match env.get(&x) {
-                Some(&Type::Array(ref ty)) => match ty as &Type {
-                    &Type::Unit => Asm::Ans(Exp::Nop),
-                    &Type::Float =>
+                Some(Type::Array(ty)) => match ty as &Type {
+                    Type::Unit => Asm::Ans(Exp::Nop),
+                    Type::Float =>
                         Asm::Ans(Exp::StDF(z, x, IdOrImm::V(y), 8)),
                     _ =>
                         Asm::Ans(Exp::St(z, x, IdOrImm::V(y), 4)),
@@ -193,10 +193,10 @@ fn h(data: &mut Vec<(id::L, OrderedFloat<f64>)>,
      id_gen: &mut IdGen) -> Fundef {
     let (intargs, floatargs) = separate(&yts);
     let mut inner_env = HashMap::new();
-    for &(ref z, ref t) in zts.iter() {
+    for (z, t) in zts.iter() {
         inner_env.insert(z.clone(), t.clone());
     }
-    for &(ref y, ref t) in yts.iter() {
+    for (y, t) in yts.iter() {
         inner_env.insert(y.clone(), t.clone());
     }
     inner_env.insert(x.clone(), t.clone());

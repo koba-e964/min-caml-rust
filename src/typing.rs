@@ -23,12 +23,12 @@ fn deref_typ(e: &Type, tyenv: &HashMap<usize, Type>) -> Type {
                        .collect::<Vec<_>>()
                        .into_boxed_slice());
     }
-    match *e {
-        Type::Fun(ref t1s, ref t2) =>
+    match e {
+        Type::Fun(t1s, t2) =>
             Type::Fun(deref_typ_list!(t1s), Box::new(deref_typ(t2, tyenv))),
-        Type::Tuple(ref ts) => Type::Tuple(deref_typ_list!(ts)),
-        Type::Array(ref t) => Type::Array(Box::new(deref_typ(t, tyenv))),
-        Type::Var(ref n) => {
+        Type::Tuple(ts) => Type::Tuple(deref_typ_list!(ts)),
+        Type::Array(t) => Type::Array(Box::new(deref_typ(t, tyenv))),
+        Type::Var(n) => {
             if let Some(t) = tyenv.get(n) {
                 deref_typ(t, tyenv)
             } else {
@@ -65,43 +65,43 @@ fn deref_term(e: &Syntax, tyenv: &HashMap<usize, Type>) -> Syntax {
         ($ls:expr) => ($ls.iter().map(|x| invoke!(x)).collect::<Vec<_>>()
                        .into_boxed_slice());
     }
-    match *e {
-        Syntax::Not(ref e) => pack!(Syntax::Not, e),
-        Syntax::Neg(ref e) => pack!(Syntax::Neg, e),
-        Syntax::IntBin(ref op, ref e1, ref e2) =>
+    match e {
+        Syntax::Not(e) => pack!(Syntax::Not, e),
+        Syntax::Neg(e) => pack!(Syntax::Neg, e),
+        Syntax::IntBin(op, e1, e2) =>
             pack_bin!(Syntax::IntBin, op, e1, e2),
-        Syntax::FNeg(ref e) => pack!(Syntax::FNeg, e),
-        Syntax::FloatBin(ref op, ref e1, ref e2) =>
+        Syntax::FNeg(e) => pack!(Syntax::FNeg, e),
+        Syntax::FloatBin(op, e1, e2) =>
             pack_bin!(Syntax::FloatBin, op, e1, e2),
-        Syntax::CompBin(ref op, ref e1, ref e2) =>
+        Syntax::CompBin(op, e1, e2) =>
             pack_bin!(Syntax::CompBin, op, e1, e2),
-        Syntax::If(ref e1, ref e2, ref e3) => pack!(Syntax::If, e1, e2, e3),
-        Syntax::Let((ref x, ref t), ref e1, ref e2) =>
+        Syntax::If(e1, e2, e3) => pack!(Syntax::If, e1, e2, e3),
+        Syntax::Let((x, t), e1, e2) =>
             Syntax::Let((x.clone(), deref_typ(t, tyenv)), Box::new(invoke!(e1)),
                         Box::new(invoke!(e2))),
-        Syntax::LetRec(ref fundef, ref e2) => {
-            let (ref x, ref t) = fundef.name;
+        Syntax::LetRec(fundef, e2) => {
+            let (x, t) = &fundef.name;
             let yts = &fundef.args;
             let e1 = &fundef.body;
             Syntax::LetRec(Fundef {
                 name: (x.to_string(), deref_typ(t, tyenv)),
                 args: yts.iter()
-                    .map(|&(ref x, ref t)| (x.clone(), deref_typ(t, tyenv)))
+                    .map(|(x, t)| (x.clone(), deref_typ(t, tyenv)))
                     .collect::<Vec<_>>()
                     .into_boxed_slice(),
                 body: Box::new(invoke!(e1))
             }, Box::new(invoke!(e2)))
         },
-        Syntax::App(ref e, ref es) =>
+        Syntax::App(e, es) =>
             Syntax::App(Box::new(invoke!(e)), boxed_array!(es)),
-        Syntax::Tuple(ref es) => Syntax::Tuple(boxed_array!(es)),
-        Syntax::LetTuple(ref xts, ref e1, ref e2) => {
-            let xts: Box<_> = xts.iter().map(|&(ref x, ref t)| (x.clone(), deref_typ(t, tyenv))).collect::<Vec<_>>().into_boxed_slice();
+        Syntax::Tuple(es) => Syntax::Tuple(boxed_array!(es)),
+        Syntax::LetTuple(xts, e1, e2) => {
+            let xts: Box<_> = xts.iter().map(|(x, t)| (x.clone(), deref_typ(t, tyenv))).collect::<Vec<_>>().into_boxed_slice();
             Syntax::LetTuple(xts, Box::new(invoke!(e1)), Box::new(invoke!(e2)))
         },
-        Syntax::Array(ref e1, ref e2) => pack!(Syntax::Array, e1, e2),
-        Syntax::Get(ref e1, ref e2) => pack!(Syntax::Get, e1, e2),
-        Syntax::Put(ref e1, ref e2, ref e3) => pack!(Syntax::Put, e1, e2, e3),
+        Syntax::Array(e1, e2) => pack!(Syntax::Array, e1, e2),
+        Syntax::Get(e1, e2) => pack!(Syntax::Get, e1, e2),
+        Syntax::Put(e1, e2, e3) => pack!(Syntax::Put, e1, e2, e3),
         _ => e.clone(),
     }
 }
@@ -113,11 +113,11 @@ fn occur(r1: usize, ty: &Type) -> bool {
     macro_rules! occur_list {
         ($ls:expr) => ($ls.iter().any(|ty| occur(r1, ty)))
     }
-    match *ty {
-        Type::Fun(ref t2s, ref t2) => occur_list!(t2s) || occur(r1, t2),
-        Type::Tuple(ref t2s) => occur_list!(t2s),
-        Type::Array(ref t2) => occur(r1, t2),
-        Type::Var(r2) => r1 == r2,
+    match ty {
+        Type::Fun(t2s, t2) => occur_list!(t2s) || occur(r1, t2),
+        Type::Tuple(t2s) => occur_list!(t2s),
+        Type::Array(t2) => occur(r1, t2),
+        Type::Var(r2) => r1 == *r2,
         _ => false,
     }
 }
@@ -142,21 +142,21 @@ fn unify(t1: &Type, t2: &Type,
         }
     }
     match (t1, t2) {
-        (&Type::Unit, &Type::Unit) => Ok(()),
-        (&Type::Bool, &Type::Bool) => Ok(()),
-        (&Type::Int, &Type::Int) => Ok(()),
-        (&Type::Float, &Type::Float) => Ok(()),
-        (&Type::Fun(ref t1s, ref t1cod), &Type::Fun(ref t2s, ref t2cod)) => {
+        (Type::Unit, Type::Unit) => Ok(()),
+        (Type::Bool, Type::Bool) => Ok(()),
+        (Type::Int, Type::Int) => Ok(()),
+        (Type::Float, Type::Float) => Ok(()),
+        (Type::Fun(t1s, t1cod), Type::Fun(t2s, t2cod)) => {
             unify_seq!(t1s, t2s);
             invoke!(t1cod, t2cod)
         },
-        (&Type::Tuple(ref t1s), &Type::Tuple(ref t2s)) => {
+        (Type::Tuple(t1s), Type::Tuple(t2s)) => {
             unify_seq!(t1s, t2s);
             Ok(())
         },
-        (&Type::Array(ref t1), &Type::Array(ref t2)) => invoke!(t1, t2),
-        (&Type::Var(ref n1), &Type::Var(ref n2)) if n1 == n2 => Ok(()),
-        (&Type::Var(ref n1), _) => {
+        (Type::Array(t1), Type::Array(t2)) => invoke!(t1, t2),
+        (Type::Var(n1), Type::Var(n2)) if n1 == n2 => Ok(()),
+        (Type::Var(n1), _) => {
             if let Some(t1sub) = tyenv.get(n1).cloned() {
                 invoke!(&t1sub, t2)
             } else {
@@ -167,7 +167,7 @@ fn unify(t1: &Type, t2: &Type,
                 Ok(())
             }
         },
-        (_, &Type::Var(_)) => invoke!(t2, t1),
+        (_, Type::Var(_)) => invoke!(t2, t1),
         _ => Err(TypingError::Unify(t1.clone(), t2.clone())),
     }
 }
@@ -195,52 +195,52 @@ fn g(env: &HashMap<String, Type>, e: &Syntax,
             argtype.into_boxed_slice()
         });
     }
-    match *e {
+    match e {
         Syntax::Unit => Ok(Type::Unit),
         Syntax::Bool(_) => Ok(Type::Bool),
         Syntax::Int(_) => Ok(Type::Int),
         Syntax::Float(_) => Ok(Type::Float),
-        Syntax::Not(ref e) => {
+        Syntax::Not(e) => {
             typed!(e, Type::Bool);
             Ok(Type::Bool)
         },
-        Syntax::Neg(ref e) => {
+        Syntax::Neg(e) => {
             typed!(e, Type::Int);
             Ok(Type::Int)
         },
-        Syntax::IntBin(_, ref e1, ref e2) => {
+        Syntax::IntBin(_, e1, e2) => {
             typed!(e1, Type::Int);
             typed!(e2, Type::Int);
             Ok(Type::Int)
         },
-        Syntax::FNeg(ref e) => {
+        Syntax::FNeg(e) => {
             typed!(e, Type::Float);
             Ok(Type::Float)
         },
-        Syntax::FloatBin(_, ref e1, ref e2) => {
+        Syntax::FloatBin(_, e1, e2) => {
             typed!(e1, Type::Float);
             typed!(e2, Type::Float);
             Ok(Type::Float)
         },
-        Syntax::CompBin(_, ref e1, ref e2) => {
+        Syntax::CompBin(_, e1, e2) => {
             try!(unify(&try!(invoke!(env, e1)), &try!(invoke!(env, e2)),
                        extenv, tyenv));
             Ok(Type::Bool)
         },
-        Syntax::If(ref e1, ref e2, ref e3) => {
+        Syntax::If(e1, e2, e3) => {
             typed!(e1, Type::Bool);
             let t2 = try!(invoke!(env, e2));
             let t3 = try!(invoke!(env, e3));
             try!(unify(&t2, &t3, extenv, tyenv));
             Ok(t2)
         },
-        Syntax::Let((ref x, ref t), ref e1, ref e2) => {
+        Syntax::Let((x, t), e1, e2) => {
             typed!(e1, t);
             let mut cp_env = env.clone();
             cp_env.insert(x.to_string(), t.clone());
             invoke!(&cp_env, e2)
         },
-        Syntax::Var(ref x) => {
+        Syntax::Var(x) => {
             if let Some(t) = env.get(x).cloned() {
                 Ok(t)
             } else if let Some(t) = extenv.get(x).cloned() {
@@ -252,14 +252,14 @@ fn g(env: &HashMap<String, Type>, e: &Syntax,
                 Ok(t)
             }
         },
-        Syntax::LetRec(ref fundef, ref e2) => {
+        Syntax::LetRec(fundef, e2) => {
             let (x, t) = fundef.name.clone();
             let yts = &fundef.args;
             let e1 = fundef.body.clone();
             let mut cp_env = env.clone();
             cp_env.insert(x, t.clone());
             let mut cp_env_body = cp_env.clone();
-            for &(ref x, ref t) in yts.iter() {
+            for (x, t) in yts.iter() {
                 cp_env_body.insert(x.to_string(), t.clone());
             }
             try!(unify(&t,
@@ -271,37 +271,37 @@ fn g(env: &HashMap<String, Type>, e: &Syntax,
                        extenv, tyenv));
             invoke!(&cp_env, e2)
         },
-        Syntax::App(ref e, ref es) => {
+        Syntax::App(e, es) => {
             let t = id_gen.gen_type();
             let funtype = Type::Fun(g_seq!(es), // List.map (g env) es
                                     Box::new(t.clone()));
             typed!(e, funtype);
             Ok(t)
         },
-        Syntax::Tuple(ref es) => Ok(Type::Tuple(g_seq!(es))),
-        Syntax::LetTuple(ref xts, ref e1, ref e2) => {
+        Syntax::Tuple(es) => Ok(Type::Tuple(g_seq!(es))),
+        Syntax::LetTuple(xts, e1, e2) => {
             typed!(e1, Type::Tuple(xts.iter()
                                    .map(|xt| xt.1.clone())
                                    .collect::<Vec<_>>()
                                    .into_boxed_slice())); // List.map snd xts
             let mut cp_env = env.clone();
-            for &(ref x, ref t) in xts.iter() {
+            for (x, t) in xts.iter() {
                 cp_env.insert(x.to_string(), t.clone());
             }
             invoke!(&cp_env, e2)
         },
-        Syntax::Array(ref e1, ref e2) => {
+        Syntax::Array(e1, e2) => {
             typed!(e1, Type::Int);
             let t = try!(invoke!(env, e2));
             Ok(Type::Array(Box::new(t)))
         }
-        Syntax::Get(ref e1, ref e2) => {
+        Syntax::Get(e1, e2) => {
             let t = id_gen.gen_type();
             typed!(e1, Type::Array(Box::new(t.clone())));
             typed!(e2, Type::Int);
             Ok(t)
         }
-        Syntax::Put(ref e1, ref e2, ref e3) => {
+        Syntax::Put(e1, e2, e3) => {
             let t = try!(invoke!(env, e3));
             typed!(e1, Type::Array(Box::new(t.clone())));
             typed!(e2, Type::Int);

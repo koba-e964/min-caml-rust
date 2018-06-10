@@ -48,20 +48,20 @@ pub struct Prog(pub Box<[Fundef]>, pub Closure);
 impl Closure {
     fn fmt2(&self, f: &mut fmt::Formatter, level: usize) -> fmt::Result {
         use self::Closure::*;
-        match *self {
+        match self {
             Unit => write!(f, "()"),
             Int(v) => write!(f, "{}", v),
             Float(fv) => write!(f, "{}", fv),
-            Neg(ref x) => write!(f, "-{}", x),
-            IntBin(op, ref x, ref y) => {
+            Neg(x) => write!(f, "-{}", x),
+            IntBin(op, x, y) => {
                 let op_str = match op {
                     self::IntBin::Add => "+",
                     self::IntBin::Sub => "-",
                 };
                 write!(f, "{} {} {}", x, op_str, y)
             },
-            FNeg(ref x) => write!(f, "-.{}", x),
-            FloatBin(op, ref x, ref y) => {
+            FNeg(x) => write!(f, "-.{}", x),
+            FloatBin(op, x, y) => {
                 let op_str = match op {
                     self::FloatBin::FAdd => "+.",
                     self::FloatBin::FSub => "-.",
@@ -70,7 +70,7 @@ impl Closure {
                 };
                 write!(f, "{} {} {}", x, op_str, y)
             },
-            IfComp(op, ref x, ref y, ref e1, ref e2) => {
+            IfComp(op, x, y, e1, e2) => {
                 let op_str = match op {
                     self::CompBin::Eq => "=",
                     self::CompBin::LE => "<=",
@@ -90,7 +90,7 @@ impl Closure {
                 }
                 e2.fmt2(f, level + 2)
             },
-            Let((ref x, ref t), ref e1, ref e2) => {
+            Let((x, t), e1, e2) => {
                 if let Type::Unit = *t {
                     if x.len() >= 6 && &x[0..6] == "_dummy" {
                         // this let expression is actually "e1; e2"
@@ -110,31 +110,31 @@ impl Closure {
                 }
                 e2.fmt2(f, level)
             },
-            Var(ref x) => write!(f, "{}", x),
-            MakeCls(ref x, ref t, ref cls, ref e) => {
+            Var(x) => write!(f, "{}", x),
+            MakeCls(x, t, cls, e) => {
                 write!(f, "MakeCls {}: {} (", x, t)?;
-                let Cls { entry: id::L(ref l), actual_fv: ref fv } = *cls;
+                let Cls { entry: id::L(l), actual_fv: fv } = cls;
                 write!(f, "{} {:?}) in\n", l, fv)?;
                 for _ in 0 .. level {
                     write!(f, " ")?;
                 }
                 e.fmt2(f, level)
             },
-            AppDir(id::L(ref func), ref args) => {
+            AppDir(id::L(func), args) => {
                 write!(f, "{}", func)?;
                 for v in args.iter() {
                     write!(f, " {}", v)?;
                 }
                 Ok(())
             },
-            AppCls(ref func, ref args) => {
+            AppCls(func, args) => {
                 write!(f, "[{}]", func)?;
                 for v in args.iter() {
                     write!(f, " {}", v)?;
                 }
                 Ok(())
             },
-            Tuple(ref elems) => {
+            Tuple(elems) => {
                 write!(f, "(")?;
                 for i in 0 .. elems.len() {
                     write!(f, "{}", elems[i])?;
@@ -144,7 +144,7 @@ impl Closure {
                 }
                 write!(f, ")")
             },
-            LetTuple(ref xts, ref y, ref e) => {
+            LetTuple(xts, y, e) => {
                 write!(f, "let (")?;
                 for i in 0 .. xts.len() {
                     write!(f, "{}: {}", xts[i].0, xts[i].1)?;
@@ -158,11 +158,11 @@ impl Closure {
                 }
                 e.fmt2(f, level)
             },
-            Get(ref x, ref y) =>
+            Get(x, y) =>
                 write!(f, "{}.({})", x, y),
-            Put(ref x, ref y, ref z) =>
+            Put(x, y, z) =>
                 write!(f, "{}.({}) <- {}", x, y, z),
-            ExtArray(id::L(ref a)) => write!(f, "(extarr:{})", a),
+            ExtArray(id::L(a)) => write!(f, "(extarr:{})", a),
         }
     }
 }
@@ -175,15 +175,15 @@ impl fmt::Display for Closure {
 
 impl fmt::Display for Fundef {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let Fundef { name: (id::L(ref x), ref t), args: ref yts, body: ref e1,
-                     formal_fv: ref fv } = *self;
+        let Fundef { name: (id::L(x), t), args: yts, body: e1,
+                     formal_fv: fv } = self;
         write!(f, "define ({}: {})", x, t)?;
-        for &(ref y, ref t) in yts.iter() {
+        for (y, t) in yts.iter() {
             write!(f, " ({}: {})", y, t)?;
         }
         if !fv.is_empty() {
             write!(f, " freevar:")?;
-            for &(ref x, ref t) in fv.iter() {
+            for (x, t) in fv.iter() {
                 write!(f, " ({}: {})", x, t)?;
             }
         }
@@ -196,7 +196,7 @@ impl fmt::Display for Fundef {
 
 impl fmt::Display for Prog {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let Prog(ref fundefs, ref e) = *self;
+        let Prog(fundefs, e) = self;
         for fundef in fundefs.iter() {
             write!(f, "{}\n", fundef)?;
         }
@@ -210,35 +210,35 @@ pub fn fv(e: &Closure) -> HashSet<String> {
     macro_rules! invoke {
         ($e:expr) => (fv($e));
     }
-    match *e {
+    match e {
         Unit | Int(_) | Float(_) | ExtArray(_) => HashSet::new(),
-        Neg(ref x) | FNeg(ref x) => build_set!(x),
-        IntBin(_, ref x, ref y) | FloatBin(_, ref x, ref y) |
-        Get(ref x, ref y) =>
+        Neg(x) | FNeg(x) => build_set!(x),
+        IntBin(_, x, y) | FloatBin(_, x, y) |
+        Get(x, y) =>
             build_set!(x, y),
-        IfComp(_, ref x, ref y, ref e1, ref e2) => {
+        IfComp(_, x, y, e1, e2) => {
             let h = build_set!(x, y);
             let s1 = invoke!(e1);
             let s2 = invoke!(e2);
             &(&h | &s1) | &s2
         },
-        Let((ref x, _), ref e1, ref e2) => {
+        Let((x, _), e1, e2) => {
             let s1 = invoke!(e1);
             let s2 = &invoke!(e2) - &build_set!(x);
             &s1 | &s2
         }
-        Var(ref x) => build_set!(x),
-        MakeCls(ref x, _, Cls { entry: _, actual_fv: ref ys }, ref e) =>
+        Var(x) => build_set!(x),
+        MakeCls(x, _, Cls { entry: _, actual_fv: ys }, e) =>
             &(&ys.iter().cloned().collect() | &invoke!(e)) - &build_set!(x),
-        AppCls(ref x, ref ys) =>
+        AppCls(x, ys) =>
             &build_set!(x) | &ys.iter().cloned().collect::<HashSet<_>>(),
-        AppDir(_, ref xs) | Tuple(ref xs) => xs.iter().cloned().collect(),
-        LetTuple(ref xs, ref y, ref e) => {
+        AppDir(_, xs) | Tuple(xs) => xs.iter().cloned().collect(),
+        LetTuple(xs, y, e) => {
             let tmp: HashSet<String> = xs.iter().map(|x| x.0.clone())
                 .collect(); // S.of_list (List.map fst xs)
             &build_set!(y) | &(&invoke!(e) - &tmp)
         },
-        Put(ref x, ref y, ref z) => build_set!(x, y, z),
+        Put(x, y, z) => build_set!(x, y, z),
     }
 }
 
@@ -272,13 +272,13 @@ fn g(env: &HashMap<String, Type>, known: &HashSet<String>,
             let mut known_p = known.clone();
             known_p.insert(x.clone());
             let mut env_p2 = env_p.clone();
-            for &(ref y, ref t) in yts.iter() {
+            for (y, t) in yts.iter() {
                 env_p2.insert(y.clone(), t.clone());
             }
             let e1p = g(&env_p2, &known_p, (*e1).clone(), &mut toplevel_cp);
             /* Check if e1p contains free variables */
             let zs =
-                &fv(&e1p) - &yts.iter().map(|&(ref y, _)| y.clone()).collect();
+                &fv(&e1p) - &yts.iter().map(|(y, _)| y.clone()).collect();
             let (known_p, e1p) = if zs.is_empty() {
                 *toplevel = toplevel_cp;
                 (&known_p, e1p)
@@ -290,7 +290,7 @@ fn g(env: &HashMap<String, Type>, known: &HashSet<String>,
                 (known, e1p)
             };
             let zs: Vec<String> = (&zs - &build_set!(x)).into_iter().collect();
-            let zts: Vec<(String, Type)> = zs.iter().map(|&ref z| (z.clone(), env.get(z).unwrap().clone())).collect();
+            let zts: Vec<(String, Type)> = zs.iter().map(|z| (z.clone(), env.get(z).unwrap().clone())).collect();
             toplevel.push(Fundef { name: (id::L(x.clone()), t.clone()),
                                    args: yts,
                                    formal_fv: zts.into_boxed_slice(),
@@ -315,7 +315,7 @@ fn g(env: &HashMap<String, Type>, known: &HashSet<String>,
         KNormal::Tuple(xs) => Tuple(xs),
         KNormal::LetTuple(xts, y, e) => {
             let mut cp_env = env.clone();
-            for &(ref x, ref t) in xts.iter() {
+            for (x, t) in xts.iter() {
                 cp_env.insert(x.clone(), t.clone());
             }
             LetTuple(xts, y, Box::new(g(&cp_env, known, *e, toplevel)))

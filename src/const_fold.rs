@@ -18,18 +18,15 @@ type ConstEnv = HashMap<String, Const>;
 fn add_env(env: &mut ConstEnv, x: String, e: &KNormal) {
     use self::KNormal::*;
     use self::Const::*;
-    match *e {
-        Int(v) => { env.insert(x, IntConst(v)); },
-        Float(f) => { env.insert(x, FloatConst(f.into())); },
+    match e {
+        Int(v) => { env.insert(x, IntConst(*v)); },
+        Float(f) => { env.insert(x, FloatConst((*f).into())); },
         // Tuple const folding is done only if all components are constant.
-        Tuple(ref xs) => {
+        Tuple(xs) => {
             let result: Option<Vec<Const>> =
                 xs.iter().map(|x| env.get(x).cloned()).collect();
-            match result {
-                None => (),
-                Some(result) => {
-                    env.insert(x, TupleConst(result.into_boxed_slice()));
-                },
+            if let Some(result) = result {
+                env.insert(x, TupleConst(result.into_boxed_slice()));
             }
         },
         _ => (),
@@ -40,21 +37,21 @@ fn add_env(env: &mut ConstEnv, x: String, e: &KNormal) {
 fn findi(x: &str, env: &ConstEnv) -> Option<i64> {
     use self::Const::*;
     match env.get(x) {
-        Some(&IntConst(v)) => Some(v),
+        Some(IntConst(v)) => Some(*v),
         _ => None,
     }
 }
 fn findf(x: &str, env: &ConstEnv) -> Option<f64> {
     use self::Const::*;
     match env.get(x) {
-        Some(&FloatConst(v)) => Some(v.into()),
+        Some(FloatConst(v)) => Some((*v).into()),
         _ => None,
     }
 }
 fn findt(x: &str, env: &ConstEnv) -> Option<Box<[Const]>> {
     use self::Const::*;
     match env.get(x) {
-        Some(&TupleConst(ref vals)) => Some(vals.clone()),
+        Some(TupleConst(vals)) => Some(vals.clone()),
         _ => None,
     }
 }

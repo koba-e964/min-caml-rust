@@ -270,8 +270,8 @@ named!(exp_unary_minus<Syntax>, alt_complete!(
     ws!(do_parse!(
         tag!("-") >>
             e: exp_unary_minus >>
-            (match &e {
-                &Syntax::Float(_) => Syntax::FNeg(Box::new(e)),
+            (match e {
+                Syntax::Float(_) => Syntax::FNeg(Box::new(e)),
                 _ => Syntax::Neg(Box::new(e))
             })
     )) |

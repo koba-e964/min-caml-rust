@@ -22,7 +22,7 @@ impl IdGen {
         Type::Var(a)
     }
     fn id_of_typ(t: &Type) -> String {
-        match *t {
+        match t {
             Type::Unit => "u",
             Type::Bool => "b",
             Type::Int => "i",

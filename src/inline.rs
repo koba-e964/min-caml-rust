@@ -4,19 +4,19 @@ use k_normal::{KNormal, KFundef, fv};
 use syntax::Type;
 use id::IdGen;
 
-fn is_recursive(&KFundef { name: (ref x, ref _t), args: ref _yts, body: ref e1 }: &KFundef)
+fn is_recursive(KFundef { name: (x, _t), args: _yts, body: e1 }: &KFundef)
                 -> bool {
-    fv(&e1).contains(x)
+    fv(e1).contains(x)
 }
 
 pub fn size(e: &KNormal) -> usize {
     use self::KNormal::*;
-    match *e {
-        IfComp(_, _, _, ref e1, ref e2) |
-        Let(_, ref e1, ref e2) |
-        LetRec(KFundef { name: _, args: _, body: ref e1 }, ref e2) =>
+    match e {
+        IfComp(_, _, _, e1, e2) |
+        Let(_, e1, e2) |
+        LetRec(KFundef { name: _, args: _, body: e1 }, e2) =>
             1 + size(e1) + size(e2),
-        LetTuple(_, _, ref e) => 1 + size(e),
+        LetTuple(_, _, e) => 1 + size(e),
         _ => 1,
     }
 }

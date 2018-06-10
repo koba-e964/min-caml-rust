@@ -71,11 +71,11 @@ pub struct Prog(pub Box<[(id::L, f64)]>, pub Box<[Fundef]>, pub Asm);
 impl Asm {
     fn fmt2(&self, f: &mut fmt::Formatter, level: usize) -> fmt::Result {
         match self {
-            &Asm::Ans(ref e) => {
+            Asm::Ans(e) => {
                 write!(f, "ret ")?;
                 e.fmt2(f, level)
             },
-            &Asm::Let(ref x, ref t, ref e1, ref e2) => {
+            Asm::Let(x, t, e1, e2) => {
                 write!(f, "let {}: {} = ", x, t)?;
                 e1.fmt2(f, level)?;
                 write!(f, " in\n")?;
@@ -208,7 +208,7 @@ impl fmt::Display for Exp {
 }
 impl fmt::Display for Fundef {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let &Fundef { name: id::L(ref name), ref args, ref fargs, ref body, ref ret }
+        let Fundef { name: id::L(name), args, fargs, body, ret }
         = self;
         write!(f, "asm-define {}", name)?;
         for y in args.iter() {
@@ -224,8 +224,8 @@ impl fmt::Display for Fundef {
 }
 impl fmt::Display for Prog {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let &Prog(ref data, ref fundefs, ref e) = self;
-        for &(id::L(ref name), ref value) in data.iter() {
+        let Prog(data, fundefs, e) = self;
+        for (id::L(name), value) in data.iter() {
             write!(f, "{} => {}\n", name, value)?;
         }
         for fundef in fundefs.iter() {
@@ -270,8 +270,8 @@ pub fn is_reg(x: &str) -> bool {
 /// free variables in the order of use (for spilling) (caml2html: sparcasm_fv)
 fn fv_id_or_imm(x: &IdOrImm) -> HashSet<String> {
     match x {
-        &IdOrImm::V(ref x) => build_set!(x),
-        &IdOrImm::C(_) => build_set!(),
+        IdOrImm::V(x) => build_set!(x),
+        IdOrImm::C(_) => build_set!(),
     }
 }
 
@@ -282,49 +282,49 @@ fn fv_parameters(ys: &[String], zs: &[String]) -> HashSet<String> {
 }
 
 fn fv_exp(x: &Exp) -> HashSet<String> {
-    match *x {
+    match x {
         Exp::Nop | Exp::Set(_) |
         Exp::SetL(_) | Exp::Comment(_) | Exp::Restore(_) => build_set!(),
-        Exp::Mov(ref x) | Exp::Neg(ref x) |
-        Exp::FMovD(ref x) | Exp::FNegD(ref x) | Exp::Save(ref x, _) =>
+        Exp::Mov(x) | Exp::Neg(x) |
+        Exp::FMovD(x) | Exp::FNegD(x) | Exp::Save(x, _) =>
             build_set!(x),
-        Exp::IntOp(_, ref x, ref yp) | Exp::Ld(ref x, ref yp, _) |
-        Exp::LdDF(ref x, ref yp, _) => {
+        Exp::IntOp(_, x, yp) | Exp::Ld(x, yp, _) |
+        Exp::LdDF(x, yp, _) => {
             let mut ret = fv_id_or_imm(yp);
             ret.insert(x.to_string());
             ret
         },
-        Exp::St(ref x, ref y, ref zp, _) |
-        Exp::StDF(ref x, ref y, ref zp, _) => {
+        Exp::St(x, y, zp, _) |
+        Exp::StDF(x, y, zp, _) => {
             let mut ret = fv_id_or_imm(zp);
             ret.insert(x.to_string());
             ret.insert(y.to_string());
             ret
         },
-        Exp::FloatOp(_, ref x, ref y) =>
+        Exp::FloatOp(_, x, y) =>
             build_set!(x, y),
-        Exp::IfComp(_, ref x, ref yp, ref e1, ref e2) => {
+        Exp::IfComp(_, x, yp, e1, e2) => {
             let h = build_set!(x);
             let s1 = fv(e1);
             let s2 = fv(e2);
             &(&h | &s1) | &(&s2 | &fv_id_or_imm(yp))
         },
-        Exp::IfFComp(_, ref x, ref y, ref e1, ref e2) => {
+        Exp::IfFComp(_, x, y, e1, e2) => {
             let h = build_set!(x, y);
             let s1 = fv(e1);
             let s2 = fv(e2);
             &(&h | &s1) | &s2
         },
-        Exp::CallCls(ref x, ref ys, ref zs) =>
+        Exp::CallCls(x, ys, zs) =>
             &build_set!(x) | &fv_parameters(ys, zs),
-        Exp::CallDir(_, ref ys, ref zs) => fv_parameters(ys, zs),
+        Exp::CallDir(_, ys, zs) => fv_parameters(ys, zs),
     }
 }
 
 pub fn fv(e: &Asm) -> HashSet<String> {
-    match *e {
-        Asm::Ans(ref exp) => fv_exp(exp),
-        Asm::Let(ref x, _, ref exp, ref e) =>
+    match e {
+        Asm::Ans(exp) => fv_exp(exp),
+        Asm::Let(x, _, exp, e) =>
             &fv_exp(exp) | &(&fv(e) - &build_set!(x)),
     }
 }

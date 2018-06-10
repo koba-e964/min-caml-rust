@@ -5,10 +5,10 @@ use k_normal::fv;
 
 fn has_effect(e: &KNormal) -> bool {
     use self::KNormal::*;
-    match *e {
-        Let(_, ref e1, ref e2) | IfComp(_, _, _, ref e1, ref e2) =>
+    match e {
+        Let(_, e1, e2) | IfComp(_, _, _, e1, e2) =>
             has_effect(e1) || has_effect(e2),
-        LetRec(_, ref e) | LetTuple(_, _, ref e) => has_effect(e),
+        LetRec(_, e) | LetTuple(_, _, e) => has_effect(e),
         App(_, _) | Put(_, _, _) | ExtFunApp(_, _) => true,
         _ => false,
     }
@@ -46,7 +46,7 @@ pub fn f(e: KNormal) -> KNormal {
         LetTuple(xts, y, e) => {
             let ep = invoke!(e);
             let live = fv(&ep);
-            let any_used = xts.iter().any(|&(ref x, _)| live.contains(x));
+            let any_used = xts.iter().any(|(x, _)| live.contains(x));
             if any_used {
                 LetTuple(xts, y, ep)
             } else {
