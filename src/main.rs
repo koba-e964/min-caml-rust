@@ -5,7 +5,7 @@ extern crate nom;
 
 use min_caml_rust::{id, parser, k_normal, typing,
                     alpha, beta, assoc, const_fold,
-                    elim, inline, closure};
+                    elim, inline, closure, x86};
 use min_caml_rust::syntax::Type;
 use nom::IResult;
 use std::collections::HashMap;
@@ -105,4 +105,6 @@ fn run(program: &[u8]) {
     }
     let closure = closure::f(e);
     println!("closure-trans = {}", closure);
+    let virtual_asm = x86::virtual_asm::f(closure, &mut id_gen);
+    println!("virtual_asm = {}", virtual_asm);
 }

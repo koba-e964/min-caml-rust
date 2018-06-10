@@ -1,6 +1,7 @@
 use syntax::{IntBin, FloatBin, Type};
 use id;
 use std::collections::{HashSet};
+use std::fmt;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum IdOrImm {
@@ -56,14 +57,183 @@ pub enum Exp {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Fundef {
-    name: id::L,
-    args: Box<[String]>,
-    fargs: Box<[String]>,
-    body: Asm,
-    ret: Type,
+    pub name: id::L,
+    pub args: Box<[String]>,
+    pub fargs: Box<[String]>,
+    pub body: Asm,
+    pub ret: Type,
 }
 
+#[derive(Debug, Clone)]
 pub struct Prog(pub Box<[(id::L, f64)]>, pub Box<[Fundef]>, pub Asm);
+
+// Display
+impl Asm {
+    fn fmt2(&self, f: &mut fmt::Formatter, level: usize) -> fmt::Result {
+        match self {
+            &Asm::Ans(ref e) => {
+                write!(f, "ret ")?;
+                e.fmt2(f, level)
+            },
+            &Asm::Let(ref x, ref t, ref e1, ref e2) => {
+                write!(f, "let {}: {} = ", x, t)?;
+                e1.fmt2(f, level)?;
+                write!(f, " in\n")?;
+                for _ in 0 .. level {
+                    write!(f, " ")?;
+                }
+                e2.fmt2(f, level)
+            },
+        }
+    }
+}
+impl Exp {
+    fn fmt2(&self, f: &mut fmt::Formatter, level: usize) -> fmt::Result {
+        match self {
+            Exp::Nop => write!(f, "nop"),
+            Exp::Set(i) => write!(f, "set {}", i),
+            Exp::SetL(id::L(l)) => write!(f, "setl {}", l),
+            Exp::Mov(x) => write!(f, "set {}", x),
+            Exp::Neg(x) => write!(f, "neg {}", x),
+            Exp::IntOp(op, x, y) => {
+                let op_string = match op {
+                    IntBin::Add => "add",
+                    IntBin::Sub => "sub",
+                };
+                write!(f, "{} {} {}", op_string, x, y)
+            },
+            Exp::Ld(x, y, offset) => write!(f, "ld {} {} {}", x, y, offset),
+            Exp::St(z, x, y, offset) =>
+                write!(f, "st {} {} {} {}", z, x, y, offset),
+            Exp::FMovD(x) => write!(f, "fmov {}", x),
+            Exp::FNegD(x) => write!(f, "fneg {}", x),
+            Exp::FloatOp(op, x, y) => {
+                let op_string = match op {
+                    FloatBin::FAdd => "fadd",
+                    FloatBin::FSub => "fsub",
+                    FloatBin::FMul => "fmul",
+                    FloatBin::FDiv => "fdiv",
+                };
+                write!(f, "{} {} {}", op_string, x, y)
+            },
+            Exp::LdDF(x, y, offset) => write!(f, "lddf {} {} {}", x, y, offset),
+            Exp::StDF(z, x, y, offset) =>
+                write!(f, "stdf {} {} {} {}", z, x, y, offset),
+            Exp::Comment(comment) => write!(f, ";; {}", comment),
+            Exp::IfComp(op, x, y, e1, e2) => {
+                let op_string = match op {
+                    CompBin::Eq => "eq",
+                    CompBin::LE => "le",
+                    CompBin::GE => "ge",
+                };
+                write!(f, "if {} {} {} then\n", op_string, x, y)?;
+                for _ in 0 .. level + 2 {
+                    write!(f, " ")?;
+                }
+                e1.fmt2(f, level + 2)?;
+                write!(f, "\n")?;
+                for _ in 0 .. level {
+                    write!(f, " ")?;
+                }
+                write!(f, "else\n")?;
+                for _ in 0 .. level + 2 {
+                    write!(f, " ")?;
+                }
+                e2.fmt2(f, level + 2)
+            },
+            Exp::IfFComp(op, x, y, e1, e2) => {
+                let op_string = match op {
+                    FCompBin::Eq => "feq",
+                    FCompBin::LE => "fle",
+                };
+                write!(f, "if {} {} {} then\n", op_string, x, y)?;
+                for _ in 0 .. level + 2 {
+                    write!(f, " ")?;
+                }
+                e1.fmt2(f, level + 2)?;
+                write!(f, "\n")?;
+                for _ in 0 .. level {
+                    write!(f, " ")?;
+                }
+                write!(f, "else\n")?;
+                for _ in 0 .. level + 2 {
+                    write!(f, " ")?;
+                }
+                e2.fmt2(f, level + 2)
+            },
+            Exp::CallCls(name, ys, zs) => {
+                write!(f, "[{}]", name)?;
+                for v in ys.iter() {
+                    write!(f, " {}", v)?;
+                }
+                write!(f, ",")?;
+                for v in zs.iter() {
+                    write!(f, " {}", v)?;
+                }
+                Ok(())
+            },
+            Exp::CallDir(id::L(name), ys, zs) => {
+                write!(f, "{}", name)?;
+                for v in ys.iter() {
+                    write!(f, " {}", v)?;
+                }
+                for v in zs.iter() {
+                    write!(f, " fl:{}", v)?;
+                }
+                Ok(())
+            },
+            Exp::Save(varname, regname) =>
+                write!(f, "SAVE {} {}", varname, regname),
+            Exp::Restore(x) => write!(f, "restore {}", x),
+        }
+    }
+}
+impl fmt::Display for IdOrImm {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            IdOrImm::V(x) => write!(f, "{}", x),
+            IdOrImm::C(imm) => write!(f, "{}", imm),
+        }
+    }
+}
+impl fmt::Display for Asm {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.fmt2(f, 0)
+    }
+}
+impl fmt::Display for Exp {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.fmt2(f, 0)
+    }
+}
+impl fmt::Display for Fundef {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let &Fundef { name: id::L(ref name), ref args, ref fargs, ref body, ref ret }
+        = self;
+        write!(f, "asm-define {}", name)?;
+        for y in args.iter() {
+            write!(f, " ({}: intptr)", y)?;
+        }
+        for y in fargs.iter() {
+            write!(f, " ({}: float)", y)?;
+        }
+        write!(f, ":{} {{\n  ", ret)?;
+        body.fmt2(f, 2)?;
+        write!(f, "\n}}")
+    }
+}
+impl fmt::Display for Prog {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let &Prog(ref data, ref fundefs, ref e) = self;
+        for &(id::L(ref name), ref value) in data.iter() {
+            write!(f, "{} => {}\n", name, value)?;
+        }
+        for fundef in fundefs.iter() {
+            write!(f, "{}\n", fundef)?;
+        }
+        write!(f, "{}", e)
+    }
+}
 
 pub fn fletd(x: String, e1: Exp, e2: Asm) -> Asm {
     Asm::Let(x, Type::Float, e1, Box::new(e2))
