@@ -347,7 +347,7 @@ fn is_ident(x: &[u8]) -> bool {
     let keywords = vec![&b"let"[..], &b"rec"[..], &b"in"[..], &b"true"[..],
                         &b"false"[..], &b"if"[..], &b"then"[..], &b"else"[..],
                         &b"Array.create"[..], &b"Array.make"[..]];
-    if x.len() == 0 || keywords.contains(&x) {
+    if x.is_empty() || keywords.contains(&x) {
         return false;
     }
     !(b'0' <= x[0] && x[0] <= b'9')
@@ -358,7 +358,7 @@ fn convert(x: &[u8], radix: i64) -> i64 {
     let mut cur = 0;
     for &v in x.iter() {
         cur *= radix;
-        cur += v as i64 - b'0' as i64;
+        cur += i64::from(v) - i64::from(b'0');
     }
     cur
 }
@@ -371,7 +371,7 @@ fn convert_to_f64(x: &[u8]) -> f64 {
         if v == b'.' {
             dot = true;
         } else {
-            tmp = (v as i64 - b'0' as i64) as f64 * base;
+            tmp = (i64::from(v) - i64::from(b'0')) as f64 * base;
         }
         if !dot {
             cur *= 10.0;
@@ -404,25 +404,25 @@ pub fn uniquify(expr: Syntax, id_gen: &mut IdGen) -> Syntax {
             } else {
                 t
             };
-            for i in 0 .. args.len() {
-                let entry = std::mem::replace(&mut args[i].1, Type::Unit);
+            for elem in args.iter_mut() {
+                let entry = std::mem::replace(&mut elem.1, Type::Unit);
                 let new_ty = if let Type::Var(_) = entry {
                     id_gen.gen_type()
                 } else {
                     entry
                 };
-                args[i].1 = new_ty;
+                elem.1 = new_ty;
             }
             let e1 = Box::new(uniquify(*e1, id_gen));
             let e2 = Box::new(uniquify(*e2, id_gen));
-            Syntax::LetRec(Fundef {name: (name, t), args: args,
+            Syntax::LetRec(Fundef {name: (name, t), args,
                                    body: e1},
                            e2)
         },
         Syntax::LetTuple(mut pat, e1, e2) => {
-            for i in 0 .. pat.len() {
-                if let Type::Var(_) = pat[i].1 {
-                    pat[i].1 = id_gen.gen_type();
+            for elem in pat.iter_mut() {
+                if let Type::Var(_) = elem.1 {
+                    elem.1 = id_gen.gen_type();
                 }
             }
             let e1 = Box::new(uniquify(*e1, id_gen));
@@ -464,11 +464,11 @@ pub fn uniquify(expr: Syntax, id_gen: &mut IdGen) -> Syntax {
         },
         Syntax::App(e1, mut e2s) => {
             let e1 = Box::new(uniquify(*e1, id_gen));
-            uniquify_box(&mut e2s, id_gen);
+            uniquify_slice(&mut e2s, id_gen);
             Syntax::App(e1, e2s)
         },
         Syntax::Tuple(mut es) => {
-            uniquify_box(&mut es, id_gen);
+            uniquify_slice(&mut es, id_gen);
             Syntax::Tuple(es)
         },
         Syntax::Array(e1, e2) => {
@@ -491,10 +491,10 @@ pub fn uniquify(expr: Syntax, id_gen: &mut IdGen) -> Syntax {
     }
 }
 
-fn uniquify_box(es: &mut Box<[Syntax]>, id_gen: &mut IdGen) {
-    for i in 0 .. es.len() {
-        let entry = std::mem::replace(&mut es[i], Syntax::Unit);
-        es[i] = uniquify(entry, id_gen);
+fn uniquify_slice(es: &mut [Syntax], id_gen: &mut IdGen) {
+    for elem in es.iter_mut() {
+        let entry = std::mem::replace(elem, Syntax::Unit);
+        *elem = uniquify(entry, id_gen);
     }
 }
 

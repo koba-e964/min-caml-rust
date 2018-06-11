@@ -9,19 +9,17 @@ fn g(env: &HashMap<String, String>, e: KNormal) -> KNormal {
     macro_rules! invoke {
         ($e: expr) => { Box::new(g(env, *$e)) }
     }
-    macro_rules! find {
-        ($name: expr) => {
-            match env.get(&$name) {
-                Some(p) => p.clone(),
-                None => $name,
-            }
+    let find = |name: String| {
+        match env.get(&name) {
+            Some(p) => p.clone(),
+            None => name,
         }
-    }
+    };
     macro_rules! find_vec_mut {
         ($vec: expr) => {
             for v in $vec.iter_mut() {
                 let picked = std::mem::replace(v, "".to_string());
-                *v = find!(picked);
+                *v = find(picked);
             }
         }
     }
@@ -29,12 +27,12 @@ fn g(env: &HashMap<String, String>, e: KNormal) -> KNormal {
         Unit => Unit,
         Int(i) => Int(i),
         Float(f) => Float(f),
-        Neg(x) => Neg(find!(x)),
-        IntBin(op, x, y) => IntBin(op, find!(x), find!(y)),
-        FNeg(x) => FNeg(find!(x)),
-        FloatBin(op, x, y) => FloatBin(op, find!(x), find!(y)),
+        Neg(x) => Neg(find(x)),
+        IntBin(op, x, y) => IntBin(op, find(x), find(y)),
+        FNeg(x) => FNeg(find(x)),
+        FloatBin(op, x, y) => FloatBin(op, find(x), find(y)),
         IfComp(op, x, y, e1, e2) =>
-            IfComp(op, find!(x), find!(y), invoke!(e1), invoke!(e2)),
+            IfComp(op, find(x), find(y), invoke!(e1), invoke!(e2)),
         Let((x, t), e1, e2) => {
             match g(env, *e1) {
                 Var(y) => {
@@ -48,11 +46,11 @@ fn g(env: &HashMap<String, String>, e: KNormal) -> KNormal {
                 }
             }
         },
-        Var(x) => Var(find!(x)),
+        Var(x) => Var(find(x)),
         LetRec(KFundef { name: xt, args: mut yts, body: e1 }, e2) => {
             for item in yts.iter_mut() {
                 let entry = std::mem::replace(&mut item.0, "".to_string());
-                item.0 = find!(entry);
+                item.0 = find(entry);
             }
             LetRec(KFundef { name: xt, args: yts,
                             body: invoke!(e1) },
@@ -60,15 +58,15 @@ fn g(env: &HashMap<String, String>, e: KNormal) -> KNormal {
         },
         App(x, mut ys) => {
             find_vec_mut!(ys);
-            App(find!(x), ys)
+            App(find(x), ys)
         },
         Tuple(mut xs) => {
             find_vec_mut!(xs);
             Tuple(xs)
         },
-        LetTuple(xts, y, e) => LetTuple(xts, find!(y), invoke!(e)),
-        Get(x, y) => Get(find!(x), find!(y)),
-        Put(x, y, z) => Put(find!(x), find!(y), find!(z)),
+        LetTuple(xts, y, e) => LetTuple(xts, find(y), invoke!(e)),
+        Get(x, y) => Get(find(x), find(y)),
+        Put(x, y, z) => Put(find(x), find(y), find(z)),
         ExtArray(x) => ExtArray(x),
         ExtFunApp(x, mut ys) => {
             find_vec_mut!(ys);

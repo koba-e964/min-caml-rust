@@ -4,6 +4,7 @@ use syntax::Type;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct L(pub String);
 
+#[derive(Default)]
 pub struct IdGen {
     x: usize,
 }

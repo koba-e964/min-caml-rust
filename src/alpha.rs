@@ -10,24 +10,16 @@ pub fn g(env: &HashMap<String, String>, e: KNormal, id_gen: &mut IdGen) -> KNorm
     macro_rules! invoke {
         ($e: expr) => { Box::new(g(env, *$e, id_gen)) }
     }
-    // You can call this macro with an effectful expression,
-    // because $name is evaluated exactly once.
-    macro_rules! find {
-        ($name: expr) => {
-            {
-                let name = $name;
-                match env.get(&name) {
-                    Some(p) => p.clone(),
-                    None => name.clone(),
-                    // None => panic!("env should have variable {}: env = {:?}, varname = {}", name, env, name),
-                }
-            }
+    let find = |name: String| {
+        match env.get(&name) {
+            Some(p) => p.clone(),
+            None => name,
         }
-    }
+    };
     macro_rules! find_vec_mut {
         ($vec: expr) => {
             for v in $vec.iter_mut() {
-                *v = find!(std::mem::replace(v, "".to_string()));
+                *v = find(std::mem::replace(v, "".to_string()));
             }
         }
     }
@@ -35,19 +27,19 @@ pub fn g(env: &HashMap<String, String>, e: KNormal, id_gen: &mut IdGen) -> KNorm
         Unit => Unit,
         Int(i) => Int(i),
         Float(f) => Float(f),
-        Neg(x) => Neg(find!(x)),
-        IntBin(op, x, y) => IntBin(op, find!(x), find!(y)),
-        FNeg(x) => FNeg(find!(x)),
-        FloatBin(op, x, y) => FloatBin(op, find!(x), find!(y)),
+        Neg(x) => Neg(find(x)),
+        IntBin(op, x, y) => IntBin(op, find(x), find(y)),
+        FNeg(x) => FNeg(find(x)),
+        FloatBin(op, x, y) => FloatBin(op, find(x), find(y)),
         IfComp(op, x, y, e1, e2) =>
-            IfComp(op, find!(x), find!(y), invoke!(e1), invoke!(e2)),
+            IfComp(op, find(x), find(y), invoke!(e1), invoke!(e2)),
         Let((x, t), e1, e2) => {
             let xn = id_gen.gen_id(&format!("{}_", x));
             let mut cp_env = env.clone();
             cp_env.insert(x, xn.clone());
             Let((xn, t), invoke!(e1), Box::new(g(&cp_env, *e2, id_gen)))
         },
-        Var(x) => Var(find!(x)),
+        Var(x) => Var(find(x)),
         LetRec(KFundef { name: (x, t), args: mut yts, body: e1 }, e2) => {
             let mut cp_env = env.clone();
             let xname = id_gen.gen_id(&x);
@@ -64,7 +56,7 @@ pub fn g(env: &HashMap<String, String>, e: KNormal, id_gen: &mut IdGen) -> KNorm
         },
         App(x, mut ys) => {
             find_vec_mut!(ys);
-            App(find!(x), ys)
+            App(find(x), ys)
         },
         Tuple(mut xs) => {
             find_vec_mut!(xs);
@@ -78,10 +70,10 @@ pub fn g(env: &HashMap<String, String>, e: KNormal, id_gen: &mut IdGen) -> KNorm
                 item.0 = newx.clone();
                 cp_env.insert(entry, newx);
             }
-            LetTuple(xts, find!(y), Box::new(g(&cp_env, *e, id_gen)))
+            LetTuple(xts, find(y), Box::new(g(&cp_env, *e, id_gen)))
         },
-        Get(x, y) => Get(find!(x), find!(y)),
-        Put(x, y, z) => Put(find!(x), find!(y), find!(z)),
+        Get(x, y) => Get(find(x), find(y)),
+        Put(x, y, z) => Put(find(x), find(y), find(z)),
         ExtArray(x) => ExtArray(x),
         ExtFunApp(x, mut ys) => {
             find_vec_mut!(ys);

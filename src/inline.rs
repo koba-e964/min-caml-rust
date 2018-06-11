@@ -16,7 +16,7 @@ pub fn size(e: &KNormal) -> usize {
     match e {
         IfComp(_, _, _, e1, e2) |
         Let(_, e1, e2) |
-        LetRec(KFundef { name: _, args: _, body: e1 }, e2) =>
+        LetRec(KFundef { body: e1, .. }, e2) =>
             1 + size(e1) + size(e2),
         LetTuple(_, _, e) => 1 + size(e),
         _ => 1,

@@ -8,25 +8,24 @@ use id::IdGen;
 // Changed from the original ml source
 #[derive(Clone, Debug)]
 enum Const {
-    IntConst(i64),
-    FloatConst(f64),
-    TupleConst(Box<[Const]>),
+    Int(i64),
+    Float(f64),
+    Tuple(Box<[Const]>),
 }
 
 type ConstEnv = HashMap<String, Const>;
 
 fn add_env(env: &mut ConstEnv, x: String, e: &KNormal) {
     use self::KNormal::*;
-    use self::Const::*;
     match e {
-        Int(v) => { env.insert(x, IntConst(*v)); },
-        Float(f) => { env.insert(x, FloatConst((*f).into())); },
+        Int(v) => { env.insert(x, Const::Int(*v)); },
+        Float(f) => { env.insert(x, Const::Float((*f).into())); },
         // Tuple const folding is done only if all components are constant.
         Tuple(xs) => {
             let result: Option<Vec<Const>> =
                 xs.iter().map(|x| env.get(x).cloned()).collect();
             if let Some(result) = result {
-                env.insert(x, TupleConst(result.into_boxed_slice()));
+                env.insert(x, Const::Tuple(result.into_boxed_slice()));
             }
         },
         _ => (),
@@ -35,34 +34,30 @@ fn add_env(env: &mut ConstEnv, x: String, e: &KNormal) {
 
 
 fn findi(x: &str, env: &ConstEnv) -> Option<i64> {
-    use self::Const::*;
     match env.get(x) {
-        Some(IntConst(v)) => Some(*v),
+        Some(Const::Int(v)) => Some(*v),
         _ => None,
     }
 }
 fn findf(x: &str, env: &ConstEnv) -> Option<f64> {
-    use self::Const::*;
     match env.get(x) {
-        Some(FloatConst(v)) => Some(*v),
+        Some(Const::Float(v)) => Some(*v),
         _ => None,
     }
 }
 fn findt(x: &str, env: &ConstEnv) -> Option<Box<[Const]>> {
-    use self::Const::*;
     match env.get(x) {
-        Some(TupleConst(vals)) => Some(vals.clone()),
+        Some(Const::Tuple(vals)) => Some(vals.clone()),
         _ => None,
     }
 }
 
 fn value_to_expr(x: Const, id_gen: &mut IdGen) -> (KNormal, Type) {
-    use self::Const::*;
     use self::KNormal::*;
     match x {
-        IntConst(v) => (Int(v), Type::Int),
-        FloatConst(f) => (Float(f.into()), Type::Float),
-        TupleConst(v) => {
+        Const::Int(v) => (Int(v), Type::Int),
+        Const::Float(f) => (Float(f.into()), Type::Float),
+        Const::Tuple(v) => {
             let mut tvar = Vec::new();
             let mut expr = Vec::new();
             let mut tys = Vec::new();

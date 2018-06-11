@@ -228,7 +228,7 @@ pub fn fv(e: &Closure) -> HashSet<String> {
             &s1 | &s2
         }
         Var(x) => build_set!(x),
-        MakeCls(x, _, Cls { entry: _, actual_fv: ys }, e) =>
+        MakeCls(x, _, Cls { actual_fv: ys, .. }, e) =>
             &(&ys.iter().cloned().collect() | &invoke!(e)) - &build_set!(x),
         AppCls(x, ys) =>
             &build_set!(x) | &ys.iter().cloned().collect::<HashSet<_>>(),
