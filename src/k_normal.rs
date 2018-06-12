@@ -219,22 +219,6 @@ pub fn fv(e: &KNormal) -> HashSet<String> {
 
 fn g(env: &HashMap<String, Type>, e: Syntax, id_gen: &mut IdGen, extenv: &HashMap<String, Type>)
      -> (KNormal, Type) {
-    /*
-     * Function insert_let is moved here, and realized as a macro.
-     */
-    macro_rules! insert_let_macro {
-        ($et:expr, $k:expr) => ({
-            let (e, t) = $et;
-            match e {
-                KNormal::Var(x) => $k(x),
-                _ => {
-                    let x = id_gen.gen_tmp(&t);
-                    let (e2, t2) = $k(x.clone());
-                    (KNormal::Let((x, t), Box::new(e), Box::new(e2)), t2)
-                },
-            }
-        });
-    }
     fn insert_let<F: FnOnce(&mut IdGen, String) -> (KNormal, Type)>((e, t): (KNormal, Type), k: F, id_gen: &mut IdGen)
         -> (KNormal, Type) {
         match e {
@@ -249,11 +233,11 @@ fn g(env: &HashMap<String, Type>, e: Syntax, id_gen: &mut IdGen, extenv: &HashMa
     macro_rules! invoke {
         ($e:expr) => (g(env, $e, id_gen, extenv));
     }
-    // (Syntax, F) -> KNormal where F: Fn(String) -> (KNormal, Type)
-    macro_rules! insert_let_helper {
-        ($e:expr, $k:expr) => ({
-            let e = invoke!($e);
-            insert_let_macro!(e, $k)
+    // (Syntax, F) -> KNormal where F: Fn(&mut IdGen, String) -> (KNormal, Type)
+    macro_rules! insert_let_helper_with_idgen {
+        ($e:expr, $k:expr, $id_gen: expr) => ({
+            let e = g(env, $e, $id_gen, extenv);
+            insert_let(e, $k, $id_gen)
         });
     }
     macro_rules! insert_let_helper_with_env {
@@ -264,10 +248,10 @@ fn g(env: &HashMap<String, Type>, e: Syntax, id_gen: &mut IdGen, extenv: &HashMa
     }
     macro_rules! insert_let_binop {
         ($e1:expr, $e2:expr, $constr:expr, $ty:expr, $op:expr) => (
-            insert_let_helper!(
-                $e1, |x| insert_let_helper!(
-                    ($e2).clone(),
-                    |y| ($constr($op, x, y), $ty))));
+            insert_let_helper_with_idgen!(
+                $e1, |id_gen, x| insert_let_helper_with_idgen!(
+                    ($e2),
+                    |_id_gen, y| ($constr($op, x, y), $ty), id_gen), id_gen));
     }
 
     match e {
@@ -281,11 +265,11 @@ fn g(env: &HashMap<String, Type>, e: Syntax, id_gen: &mut IdGen, extenv: &HashMa
                                Box::new(Syntax::Bool(false)),
                                Box::new(Syntax::Bool(true)))),
         Syntax::Neg(e) =>
-            insert_let_helper!(*e, |x| (KNormal::Neg(x), Type::Int)),
+            insert_let_helper_with_idgen!(*e, |_, x| (KNormal::Neg(x), Type::Int), id_gen),
         Syntax::IntBin(op, e1, e2) =>
             insert_let_binop!(*e1, *e2, KNormal::IntBin, Type::Int, op),
         Syntax::FNeg(e) =>
-            insert_let_helper!(*e, |x| (KNormal::FNeg(x), Type::Float)),
+            insert_let_helper_with_idgen!(*e, |_, x| (KNormal::FNeg(x), Type::Float), id_gen),
         Syntax::FloatBin(op, e1, e2) =>
             insert_let_binop!(*e1, *e2, KNormal::FloatBin, Type::Float, op),
         Syntax::CompBin(_, _, _) =>
@@ -297,16 +281,17 @@ fn g(env: &HashMap<String, Type>, e: Syntax, id_gen: &mut IdGen, extenv: &HashMa
             match tmp {
                 Syntax::Not(e1) => invoke!(Syntax::If(e1, e4, e3)),
                 Syntax::CompBin(op, e1, e2) =>
-                    insert_let_helper!(
+                    insert_let_helper_with_idgen!(
                         *e1,
-                        |x| insert_let_helper!(
-                            (*e2).clone(), // TODO maybe unnecessary cloning, but needed to squelch borrow checker
-                            |y| {
-                                let (e3p, t3) = invoke!((*e3).clone());
-                                let (e4p, _t4) = invoke!((*e4).clone());
+                        |id_gen, x| insert_let_helper_with_idgen!(
+                            *e2,
+                            |id_gen, y| {
+                                let (e3p, t3) = g(env, *e3, id_gen, extenv);
+                                let (e4p, _t4) = g(env, *e4, id_gen, extenv);
                                 (KNormal::IfComp(op, x, y, Box::new(e3p),
                                                  Box::new(e4p)), t3)
-                            })),
+                            }, id_gen),
+                        id_gen),
                 _ => invoke!(Syntax::If(Box::new(Syntax::CompBin(CompBin::Eq, Box::new(tmp), Box::new(Syntax::Bool(false)))),
                                         e4, e3)),
             }
@@ -429,33 +414,37 @@ fn g(env: &HashMap<String, Type>, e: Syntax, id_gen: &mut IdGen, extenv: &HashMa
             bind(Vec::new(), Vec::new(), 0, env, id_gen, extenv, &es)
         },
         Syntax::LetTuple(xts, e1, e2) => {
-            insert_let_helper!(*e1,
-                               move |y| {
-                                   let mut cp_env = env.clone();
-                                   for (x, t) in xts.iter() {
-                                       cp_env.insert(x.clone(), t.clone());
-                                   }
-                                   let (e2p, t2) = g(&cp_env, *e2, id_gen,
-                                                     extenv);
-                                   (KNormal::LetTuple(xts, y, Box::new(e2p)),
-                                    t2)
-                               }
+            insert_let_helper_with_idgen!(
+                *e1,
+                move |id_gen, y| {
+                    let mut cp_env = env.clone();
+                    for (x, t) in xts.iter() {
+                        cp_env.insert(x.clone(), t.clone());
+                    }
+                    let (e2p, t2) = g(&cp_env, *e2, id_gen,
+                                      extenv);
+                    (KNormal::LetTuple(xts, y, Box::new(e2p)),
+                     t2)
+                },
+                id_gen
             )
         },
         Syntax::Array(e1, e2) => {
-            insert_let_helper!(*e1,
-                               move |x| {
-                                   let g_e2 = invoke!((*e2).clone());
-                                   let t2 = g_e2.1.clone();
-                                   insert_let(g_e2,
-                                                     move |_id_gen, y| {
-                                                         let l = match t2.clone() {
-                                                             Type::Float => "create_float_array",
-                                                             _ => "create_array",
-                                                         }.to_string();
-                                                         (KNormal::ExtFunApp(l, Box::new([x, y])), Type::Array(Box::new(t2)))
-                                                     }, id_gen)
-                               })
+            insert_let_helper_with_idgen!(
+                *e1,
+                |id_gen, x| {
+                    let g_e2 = g(env, (*e2).clone(), id_gen, extenv);
+                    let t2 = g_e2.1.clone();
+                    insert_let(g_e2,
+                               move |_id_gen, y| {
+                                   let l = match t2.clone() {
+                                       Type::Float => "create_float_array",
+                                       _ => "create_array",
+                                   }.to_string();
+                                   (KNormal::ExtFunApp(l, Box::new([x, y])), Type::Array(Box::new(t2)))
+                               }, id_gen)
+                },
+                id_gen)
         },
         Syntax::Get(e1, e2) => {
             let g_e1 = invoke!(*e1);
@@ -468,11 +457,13 @@ fn g(env: &HashMap<String, Type>, e: Syntax, id_gen: &mut IdGen, extenv: &HashMa
             }
         },
         Syntax::Put(e1, e2, e3) => {
-            insert_let_helper!(
-                *e1, |x| insert_let_helper!(
-                    (*e2).clone(), |y| insert_let_helper!(
-                        (*e3).clone(), |z|
-                        (KNormal::Put(x, y, z), Type::Unit))))
+            insert_let_helper_with_idgen!(
+                *e1, |id_gen, x| insert_let_helper_with_idgen!(
+                    (*e2).clone(), |id_gen, y| insert_let_helper_with_idgen!(
+                        (*e3).clone(), |_id_gen, z|
+                        (KNormal::Put(x, y, z), Type::Unit), id_gen),
+                    id_gen),
+                id_gen)
                 
         },
     }
