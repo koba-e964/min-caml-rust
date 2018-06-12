@@ -235,6 +235,17 @@ fn g(env: &HashMap<String, Type>, e: Syntax, id_gen: &mut IdGen, extenv: &HashMa
             }
         });
     }
+    fn insert_let<F: FnOnce(&mut IdGen, String) -> (KNormal, Type)>((e, t): (KNormal, Type), k: F, id_gen: &mut IdGen)
+        -> (KNormal, Type) {
+        match e {
+            KNormal::Var(x) => k(id_gen, x),
+            _ => {
+                let x = id_gen.gen_tmp(&t);
+                let (e2, t2) = k(id_gen, x.clone());
+                (KNormal::Let((x, t), Box::new(e), Box::new(e2)), t2)
+            },
+        }
+    };
     macro_rules! insert_let_macro_with_env {
         ($et:expr, $k:expr, $env:expr, $id_gen:expr, $extenv:expr) => ({
             let (e, t) = $et;
@@ -371,11 +382,12 @@ fn g(env: &HashMap<String, Type>, e: Syntax, id_gen: &mut IdGen, extenv: &HashMa
                                                             }, env, id_gen, extenv)
                             }
                         }
-                        insert_let_macro!(
+                        insert_let(
                             g_e1.clone(),
-                            |f: String|
+                            |id_gen, f: String|
                             bind(Vec::new(), 0, id_gen, extenv, env,
-                                 &e2s, (*t).clone(), f))
+                                 &e2s, (*t).clone(), f),
+                            id_gen)
                     },
                     _ => panic!(),
                 }
@@ -448,23 +460,23 @@ fn g(env: &HashMap<String, Type>, e: Syntax, id_gen: &mut IdGen, extenv: &HashMa
                                move |x| {
                                    let g_e2 = invoke!((*e2).clone());
                                    let t2 = g_e2.1.clone();
-                                   insert_let_macro!(g_e2,
-                                                     move |y| {
+                                   insert_let(g_e2,
+                                                     move |_id_gen, y| {
                                                          let l = match t2.clone() {
                                                              Type::Float => "create_float_array",
                                                              _ => "create_array",
                                                          }.to_string();
                                                          (KNormal::ExtFunApp(l, Box::new([x, y])), Type::Array(Box::new(t2)))
-                                                     })
+                                                     }, id_gen)
                                })
         },
         Syntax::Get(e1, e2) => {
             let g_e1 = invoke!(*e1);
             match g_e1.1.clone() {
-                Type::Array(ref t) => insert_let_macro!(
+                Type::Array(ref t) => insert_let(
                     g_e1,
-                    |x| insert_let_helper!(
-                        (*e2).clone(), |y| (KNormal::Get(x, y), (t as &Type).clone()))),
+                    |id_gen, x| insert_let_helper_with_env!(
+                        (*e2).clone(), |y| (KNormal::Get(x, y), (t as &Type).clone()), env, id_gen, extenv), id_gen),
                 _ => panic!("e1 should be an array")
             }
         },
