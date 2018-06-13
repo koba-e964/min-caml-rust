@@ -16,13 +16,11 @@ pub fn g(env: &HashMap<String, String>, e: KNormal, id_gen: &mut IdGen) -> KNorm
             None => name,
         }
     };
-    macro_rules! find_vec_mut {
-        ($vec: expr) => {
-            for v in $vec.iter_mut() {
-                *v = find(std::mem::replace(v, "".to_string()));
-            }
+    let find_vec_mut = |vec: &mut [String]| {
+        for v in vec.iter_mut() {
+            *v = find(std::mem::replace(v, String::new()));
         }
-    }
+    };
     match e {
         Unit => Unit,
         Int(i) => Int(i),
@@ -55,11 +53,11 @@ pub fn g(env: &HashMap<String, String>, e: KNormal, id_gen: &mut IdGen) -> KNorm
                    Box::new(g(&cp_env, *e2, id_gen)))
         },
         App(x, mut ys) => {
-            find_vec_mut!(ys);
+            find_vec_mut(&mut ys);
             App(find(x), ys)
         },
         Tuple(mut xs) => {
-            find_vec_mut!(xs);
+            find_vec_mut(&mut xs);
             Tuple(xs)
         },
         LetTuple(mut xts, y, e) => {
@@ -76,7 +74,7 @@ pub fn g(env: &HashMap<String, String>, e: KNormal, id_gen: &mut IdGen) -> KNorm
         Put(x, y, z) => Put(find(x), find(y), find(z)),
         ExtArray(x) => ExtArray(x),
         ExtFunApp(x, mut ys) => {
-            find_vec_mut!(ys);
+            find_vec_mut(&mut ys);
             ExtFunApp(x, ys)
         }
     }
