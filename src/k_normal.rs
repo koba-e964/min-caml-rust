@@ -219,7 +219,8 @@ pub fn fv(e: &KNormal) -> HashSet<String> {
 
 fn g(env: &HashMap<String, Type>, e: Syntax, id_gen: &mut IdGen, extenv: &HashMap<String, Type>)
      -> (KNormal, Type) {
-    fn insert_let<F: FnOnce(&mut IdGen, String) -> (KNormal, Type)>((e, t): (KNormal, Type), k: F, id_gen: &mut IdGen)
+    fn insert_let<F: FnOnce(&mut IdGen, String) -> (KNormal, Type)>(
+        (e, t): (KNormal, Type), k: F, id_gen: &mut IdGen)
         -> (KNormal, Type) {
         match e {
             KNormal::Var(x) => k(id_gen, x),
@@ -229,32 +230,31 @@ fn g(env: &HashMap<String, Type>, e: Syntax, id_gen: &mut IdGen, extenv: &HashMa
                 (KNormal::Let((x, t), Box::new(e), Box::new(e2)), t2)
             },
         }
-    };
+    }
     macro_rules! invoke {
         ($e:expr) => (g(env, $e, id_gen, extenv));
     }
     // (Syntax, F) -> KNormal where F: Fn(&mut IdGen, String) -> (KNormal, Type)
     macro_rules! insert_let_helper_with_idgen {
         ($e:expr, $k:expr, $id_gen: expr) => ({
-            let e = g(env, $e, $id_gen, extenv);
-            insert_let(e, $k, $id_gen)
+            insert_let_helper_with_env($e, $k, env, $id_gen, extenv)
         });
     }
-    fn insert_let_helper_with_env<F: FnOnce(&mut IdGen, String) -> (KNormal, Type)>
-        (e: Syntax,
-         k: F,
-         env: &HashMap<String, Type>,
-         id_gen: &mut IdGen,
-         extenv: &HashMap<String, Type>)
-         -> (KNormal, Type) {
-            let e = g(env, e, id_gen, extenv);
-            insert_let(e, k, id_gen)
-        }
+    fn insert_let_helper_with_env<F: FnOnce(&mut IdGen, String) -> (KNormal, Type)>(
+        e: Syntax,
+        k: F,
+        env: &HashMap<String, Type>,
+        id_gen: &mut IdGen,
+        extenv: &HashMap<String, Type>)
+        -> (KNormal, Type) {
+        let e = g(env, e, id_gen, extenv);
+        insert_let(e, k, id_gen)
+    }
     macro_rules! insert_let_binop {
         ($e1:expr, $e2:expr, $constr:expr, $ty:expr, $op:expr) => (
             insert_let_helper_with_idgen!(
                 $e1, |id_gen, x| insert_let_helper_with_idgen!(
-                    ($e2),
+                    $e2,
                     |_id_gen, y| ($constr($op, x, y), $ty), id_gen), id_gen));
     }
 
