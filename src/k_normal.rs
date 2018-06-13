@@ -240,12 +240,16 @@ fn g(env: &HashMap<String, Type>, e: Syntax, id_gen: &mut IdGen, extenv: &HashMa
             insert_let(e, $k, $id_gen)
         });
     }
-    macro_rules! insert_let_helper_with_env {
-        ($e:expr, $k:expr, $env:expr, $id_gen:expr, $extenv:expr) => ({
-            let e = g($env, $e, $id_gen, $extenv);
-            insert_let(e, $k, $id_gen)
-        });
-    }
+    fn insert_let_helper_with_env<F: FnOnce(&mut IdGen, String) -> (KNormal, Type)>
+        (e: Syntax,
+         k: F,
+         env: &HashMap<String, Type>,
+         id_gen: &mut IdGen,
+         extenv: &HashMap<String, Type>)
+         -> (KNormal, Type) {
+            let e = g(env, e, id_gen, extenv);
+            insert_let(e, k, id_gen)
+        }
     macro_rules! insert_let_binop {
         ($e1:expr, $e2:expr, $constr:expr, $ty:expr, $op:expr) => (
             insert_let_helper_with_idgen!(
@@ -347,11 +351,12 @@ fn g(env: &HashMap<String, Type>, e: Syntax, id_gen: &mut IdGen, extenv: &HashMa
                                     xs.clone().into_boxed_slice()),
                                  t.clone())
                             } else {
-                                insert_let_helper_with_env!(e2s[p].clone(),
-                                                            |id_gen, x: String| {
-                                                                xs.push(x.clone());
-                                                                bind(xs, p + 1, id_gen, extenv, env, e2s, t, f)
-                                                            }, env, id_gen, extenv)
+                                insert_let_helper_with_env(
+                                    e2s[p].clone(),
+                                    |id_gen, x: String| {
+                                        xs.push(x.clone());
+                                        bind(xs, p + 1, id_gen, extenv, env, e2s, t, f)
+                                    }, env, id_gen, extenv)
                             }
                         }
                         insert_let(
@@ -376,11 +381,12 @@ fn g(env: &HashMap<String, Type>, e: Syntax, id_gen: &mut IdGen, extenv: &HashMa
                                     xs.clone().into_boxed_slice()),
                                  t.clone())
                             } else {
-                                insert_let_helper_with_env!(e2s[p].clone(),
-                                                            |id_gen, x: String| {
-                                                                xs.push(x.clone());
-                                                                bind(xs, p + 1, id_gen, extenv, env, e2s, t, f)
-                                                            }, env, id_gen, extenv)
+                                insert_let_helper_with_env(
+                                    e2s[p].clone(),
+                                    |id_gen, x: String| {
+                                        xs.push(x.clone());
+                                        bind(xs, p + 1, id_gen, extenv, env, e2s, t, f)
+                                    }, env, id_gen, extenv)
                             }
                         }
                         bind(Vec::new(), 0, id_gen, extenv, env,
@@ -451,7 +457,7 @@ fn g(env: &HashMap<String, Type>, e: Syntax, id_gen: &mut IdGen, extenv: &HashMa
             match g_e1.1.clone() {
                 Type::Array(ref t) => insert_let(
                     g_e1,
-                    |id_gen, x| insert_let_helper_with_env!(
+                    |id_gen, x| insert_let_helper_with_env(
                         *e2, |_id_gen, y| (KNormal::Get(x, y), (t as &Type).clone()), env, id_gen, extenv), id_gen),
                 _ => panic!("e1 should be an array")
             }
