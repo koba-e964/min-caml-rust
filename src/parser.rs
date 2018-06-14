@@ -1,10 +1,16 @@
 extern crate std;
-use nom::{digit};
+use nom::{IResult, digit};
+use nom::types::CompleteByteSlice;
 use syntax::*;
 use id::IdGen;
 use ordered_float::OrderedFloat;
 
-named!(simple_exp_no_index<Syntax>, alt_complete!(
+
+pub fn parse(x: &[u8]) -> IResult<CompleteByteSlice, Syntax> {
+    exp(CompleteByteSlice(x))
+}
+
+named!(simple_exp_no_index<CompleteByteSlice, Syntax>, alt_complete!(
     ws!(do_parse!(tag!("(") >> res: exp >> tag!(")") >> (res))) |
     ws!(do_parse!(tag!("(") >> tag!(")") >> (Syntax::Unit))) |
     ws!(do_parse!(b: bool_lit >> (Syntax::Bool(b)))) |
@@ -13,7 +19,7 @@ named!(simple_exp_no_index<Syntax>, alt_complete!(
     ws!(do_parse!(id: ident >> (Syntax::Var(id))))
 ));
 
-named!(simple_exp<Syntax>,
+named!(simple_exp<CompleteByteSlice, Syntax>,
        ws!(do_parse!(
            init: simple_exp_no_index >>
                res: fold_many0!(
@@ -26,7 +32,7 @@ named!(simple_exp<Syntax>,
                (res)
        ))
 );
-named!(array_index_list<(Syntax, Vec<Syntax>)>,
+named!(array_index_list<CompleteByteSlice, (Syntax, Vec<Syntax>)>,
        ws!(do_parse!(
            init: simple_exp_no_index >>
                res: fold_many1!(
@@ -41,9 +47,9 @@ named!(array_index_list<(Syntax, Vec<Syntax>)>,
        ))
 );
 
-named!(pub exp<Syntax>, ws!(exp_let));
+named!(exp<CompleteByteSlice, Syntax>, ws!(exp_let));
 
-named!(exp_let<Syntax>, alt_complete!(
+named!(exp_let<CompleteByteSlice, Syntax>, alt_complete!(
     ws!(do_parse!(
         tag!("let") >>
             id: ident >>
@@ -75,7 +81,7 @@ named!(exp_let<Syntax>, alt_complete!(
     ws!(exp_semicolon)
 ));
 
-named!(exp_let_after_if<Syntax>, alt_complete!(
+named!(exp_let_after_if<CompleteByteSlice, Syntax>, alt_complete!(
     ws!(do_parse!(
         tag!("let") >>
             id: ident >>
@@ -107,7 +113,7 @@ named!(exp_let_after_if<Syntax>, alt_complete!(
     ws!(exp_if)
 ));
 
-named!(pat<Vec<(String, Type)>>, ws!(do_parse!(
+named!(pat<CompleteByteSlice, Vec<(String, Type)> >, ws!(do_parse!(
     init: ident >>
         res: fold_many1!(
             ws!(preceded!(tag!(","), ident)),
@@ -120,7 +126,7 @@ named!(pat<Vec<(String, Type)>>, ws!(do_parse!(
         (res)
 )));
 
-named!(fundef<Fundef>,
+named!(fundef<CompleteByteSlice, Fundef>,
        ws!(do_parse!(
            funname: ident >>
                args: formal_args >>
@@ -132,14 +138,14 @@ named!(fundef<Fundef>,
        ))
 );
 
-named!(formal_args<Vec<(String, Type)>>,
+named!(formal_args<CompleteByteSlice, Vec<(String, Type)>>,
        ws!(do_parse!(
            x: many1!(ident) >>
                (x.into_iter().map(|x| (x, Type::Var(0) /* stub type */)).collect())
        ))
 );
 
-named!(exp_semicolon<Syntax>, alt_complete!(
+named!(exp_semicolon<CompleteByteSlice, Syntax>, alt_complete!(
     ws!(do_parse!(
         e1: exp_if >>
             tag!(";") >>
@@ -150,7 +156,7 @@ named!(exp_semicolon<Syntax>, alt_complete!(
     ws!(exp_if)
 ));
 
-named!(exp_if<Syntax>, alt_complete!(
+named!(exp_if<CompleteByteSlice, Syntax>, alt_complete!(
     ws!(do_parse!(
         tag!("if") >>
             e1: exp >>
@@ -163,7 +169,7 @@ named!(exp_if<Syntax>, alt_complete!(
     ws!(exp_assign)
 ));
 
-named!(exp_assign<Syntax>, alt_complete!(
+named!(exp_assign<CompleteByteSlice, Syntax>, alt_complete!(
     ws!(do_parse!(
         base_indices: array_index_list >>
             tag!("<-") >>
@@ -180,7 +186,7 @@ named!(exp_assign<Syntax>, alt_complete!(
     ws!(exp_comma)
 ));
 
-named!(exp_comma<Syntax>, alt_complete!(
+named!(exp_comma<CompleteByteSlice, Syntax>, alt_complete!(
     ws!(do_parse!(
         init: exp_comparative >>
             res: fold_many1!(
@@ -195,7 +201,7 @@ named!(exp_comma<Syntax>, alt_complete!(
 
 macro_rules! exp_binary_operator {
     ($rule:ident, $next_rule: ident, $op: ident, $folder: expr) => {
-        named!($rule<Syntax>,
+        named!($rule<CompleteByteSlice, Syntax>,
                ws!(do_parse!(
                    init: $next_rule >>
                        res: fold_many0!(
@@ -225,7 +231,7 @@ exp_binary_operator!(
     }
 );
 // (operator, negated, arguments flipped)
-named!(comp_op<(CompBin, bool, bool)>, alt_complete!(
+named!(comp_op<CompleteByteSlice, (CompBin, bool, bool)>, alt_complete!(
     do_parse!(tag!("<=") >> ((CompBin::LE, false, false))) |
     do_parse!(tag!(">=") >> ((CompBin::LE, false, true))) |
     do_parse!(tag!("<>") >> ((CompBin::Eq, true, false))) |
@@ -241,7 +247,7 @@ exp_binary_operator!(
         Ok(op) => Syntax::IntBin(op, Box::new(acc), Box::new(arg)),
     }
 );
-named!(add_op<Result<IntBin, FloatBin>>, alt_complete!(
+named!(add_op<CompleteByteSlice, Result<IntBin, FloatBin>>, alt_complete!(
     do_parse!(tag!("+.") >> (Err(FloatBin::FAdd))) |
     do_parse!(tag!("-.") >> (Err(FloatBin::FSub))) |
     do_parse!(tag!("+") >> (Ok(IntBin::Add))) |
@@ -256,12 +262,12 @@ exp_binary_operator!(
         Ok(op) => Syntax::IntBin(op, Box::new(acc), Box::new(arg)),
     }
 );
-named!(mult_op<Result<IntBin, FloatBin>>, alt_complete!(
+named!(mult_op<CompleteByteSlice, Result<IntBin, FloatBin>>, alt_complete!(
     do_parse!(tag!("*.") >> (Err(FloatBin::FMul))) |
     do_parse!(tag!("/.") >> (Err(FloatBin::FDiv)))
 ));
 
-named!(exp_unary_minus<Syntax>, alt_complete!(
+named!(exp_unary_minus<CompleteByteSlice, Syntax>, alt_complete!(
     ws!(do_parse!(
         tag!("-.") >>
             e: exp_unary_minus >>
@@ -279,7 +285,7 @@ named!(exp_unary_minus<Syntax>, alt_complete!(
 ));
 
 
-named!(exp_app<Syntax>, alt_complete!(
+named!(exp_app<CompleteByteSlice, Syntax>, alt_complete!(
     ws!(do_parse!(tag!("!") >> res: exp_app >> (Syntax::Not(Box::new(res))))) |
     ws!(do_parse!(
         _init: alt_complete!(tag!("Array.create") | tag!("Array.make")) >>
@@ -302,38 +308,38 @@ named!(exp_app<Syntax>, alt_complete!(
     ws!(simple_exp)
 ));
 
-named!(bool_lit<bool>, alt_complete!(
+named!(bool_lit<CompleteByteSlice, bool>, alt_complete!(
     ws!(do_parse!(tag!("true") >> (true))) |
     ws!(do_parse!(tag!("false") >> (false)))
 ));
 
-named!(int_lit<i64>, ws!(do_parse!(
+named!(int_lit<CompleteByteSlice, i64>, ws!(do_parse!(
     x: digit >>
-        (convert(x, 10))
+        (convert(&x, 10))
 )));
 
 // TODO supports only digit+ . digit+
-named!(float_lit<f64>, alt_complete!(
+named!(float_lit<CompleteByteSlice, f64>, alt_complete!(
     do_parse!(
         fstr: recognize!(do_parse!(
-            x: digit >>
-                s: preceded!(char!('.'), digit)
+            _x: digit >>
+                _s: preceded!(char!('.'), digit)
                 >> (())) ) >>
-            (convert_to_f64(fstr))
+            (convert_to_f64(&fstr))
     ) |
     do_parse!(
         fstr: recognize!(do_parse!(
-            x: digit >>
-                s: char!('.')
+            _x: digit >>
+                _s: char!('.')
                 >> (())) ) >>
-            (convert_to_f64(fstr))
+            (convert_to_f64(&fstr))
     )
 ));
                           
 
-named!(ident<String>, ws!(do_parse!(
+named!(ident<CompleteByteSlice, String>, ws!(do_parse!(
     s: verify!(take_till!(is_not_ident_u8), is_ident) >>
-        (String::from_utf8(s.to_vec()).unwrap())
+        (String::from_utf8((&s as &[u8]).to_vec()).unwrap())
 )));
 
 fn is_not_ident_u8(x: u8) -> bool {
@@ -343,7 +349,11 @@ fn is_not_ident_u8(x: u8) -> bool {
       x == b'_')
 }
 
-fn is_ident(x: &[u8]) -> bool {
+fn is_ident(x: CompleteByteSlice) -> bool {
+    is_ident_u8_slice(&x)
+}
+
+fn is_ident_u8_slice(x: &[u8]) -> bool {
     let keywords = vec![&b"let"[..], &b"rec"[..], &b"in"[..], &b"true"[..],
                         &b"false"[..], &b"if"[..], &b"then"[..], &b"else"[..],
                         &b"Array.create"[..], &b"Array.make"[..]];
@@ -665,39 +675,37 @@ Operator precedence:
 
 #[cfg(test)]
 mod tests {
-    use parser::exp;
+    use parser::parse;
     use ordered_float::OrderedFloat;
     #[test]
     fn test_simple_exp() {
-        use nom::IResult;
         use syntax::Syntax::*;
-        assert_eq!(exp(b" ( c)"), IResult::Done(&[0u8; 0][..],
-                                                Var("c".to_string())));
-        assert_eq!(exp(b"() "), IResult::Done(&[0u8; 0][..], Unit));
-        assert_eq!(exp(b"100"), IResult::Done(&[0u8; 0][..], Int(100)));
-        assert_eq!(exp(b"10.0"), IResult::Done(
-            &[0u8; 0][..], Float(OrderedFloat::from(10.0))));
-        assert_eq!(exp(b"1256.25"),
-                   IResult::Done(&[0u8; 0][..],
-                                 Float(OrderedFloat::from(1256.25))));
-        assert_eq!(exp(b"a.(b)"),
-                   IResult::Done(&[0u8; 0][..],
-                                 Get(Box::new(Var("a".to_string())),
-                                     Box::new(Var("b".to_string())))));
-        assert_eq!(exp(b"a.(b).(c)"),
-                   IResult::Done(&[0u8; 0][..],
-                                 Get(
-                                     Box::new(
-                                         Get(Box::new(Var("a".to_string())),
-                                             Box::new(Var("b".to_string())))),
-                                     Box::new(Var("c".to_string())))));
+        assert_eq!(parse(b" ( c)"), Ok(((&[][..]).into(),
+                                      Var("c".to_string()))));
+        assert_eq!(parse(b"() "), Ok(((&[][..]).into(), Unit)));
+        assert_eq!(parse(b"100"), Ok(((&[][..]).into(), Int(100))));
+        assert_eq!(parse(b"10.0"), Ok((
+            (&[][..]).into(), Float(OrderedFloat::from(10.0)))));
+        assert_eq!(parse(b"1256.25"),
+                   Ok(((&[][..]).into(),
+                       Float(OrderedFloat::from(1256.25)))));
+        assert_eq!(parse(b"a.(b)"),
+                   Ok(((&[][..]).into(),
+                       Get(Box::new(Var("a".to_string())),
+                           Box::new(Var("b".to_string()))))));
+        assert_eq!(parse(b"a.(b).(c)"),
+                   Ok(((&[][..]).into(),
+                       Get(Box::new(
+                           Get(Box::new(Var("a".to_string())),
+                               Box::new(Var("b".to_string())))),
+                           Box::new(Var("c".to_string()))))));
     }
 
     #[test]
     fn test_let() {
         use syntax::Syntax::{Int, Let};
-        let result = exp(b"let x = 0 in 1").unwrap();
-        assert_eq!(result.0, &[0u8; 0]);
+        let result = parse(b"let x = 0 in 1").unwrap();
+        assert_eq!(result.0, (&[][..]).into());
         match result.1 {
             Let((id, _), e1, e2) => {
                 assert_eq!(id, "x");
@@ -712,8 +720,8 @@ mod tests {
     fn test_letrec() {
         use syntax::Fundef;
         use syntax::Syntax::{App, Int, LetRec, Var};
-        let result = exp(b"let rec f x = x in f 1").unwrap();
-        assert_eq!(result.0, &[0u8; 0]);
+        let result = parse(b"let rec f x = x in f 1").unwrap();
+        assert_eq!(result.0, (&[][..]).into());
         match result.1 {
             LetRec(Fundef { name: (id, _), args: _, body: e1 }, e2) => {
                 assert_eq!(id, "f");
@@ -728,8 +736,8 @@ mod tests {
     #[test]
     fn test_lettuple() {
         use syntax::Syntax::{Int, App, LetTuple, Var};
-        let result = exp(b"let (x, y) = make_pair 1 2 in x").unwrap();
-        assert_eq!(result.0, &[0u8; 0]);
+        let result = parse(b"let (x, y) = make_pair 1 2 in x").unwrap();
+        assert_eq!(result.0, (&[][..]).into());
         match result.1 {
             LetTuple(_pat, e1, e2) => {
                 assert_eq!(*e1,
@@ -743,18 +751,15 @@ mod tests {
 
     #[test]
     fn test_semicolon() {
-        use nom::IResult;
         use syntax::Syntax::{App, Int, Let, Unit, Var};
         use syntax::Type;
-        let result = exp(b"print_int 0; (); print_int 1");
+        let result = parse(b"print_int 0; (); print_int 1");
         let print_int = || Box::new(Var("print_int".to_string()));
         let dummy = || ("_dummy".to_string(), Type::Unit);
         // semicolon is right-associative
         assert_eq!(result,
-                   IResult::Done(
-                       &[0u8; 0][..],
-                       Let(
-                           dummy(),
+                   Ok(((&[][..]).into(),
+                       Let(dummy(),
                            Box::new(App(print_int(),
                                         Box::new([Int(0)]))),
                            Box::new(Let(
@@ -762,205 +767,189 @@ mod tests {
                                Box::new(Unit),
                                Box::new(App(
                                    print_int(),
-                                   Box::new([Int(1)]))))))));
+                                   Box::new([Int(1)])))))))));
     }
 
     #[test]
     fn test_if() {
-        use nom::IResult;
         use syntax::Syntax::{App, Int, If, Var};
-        assert_eq!(exp(b"if f 3 then 4 else 0"),
-                   IResult::Done(
-                       &[0u8; 0][..],
+        assert_eq!(parse(b"if f 3 then 4 else 0"),
+                   Ok(((&[][..]).into(),
                        If(
                            Box::new(App(Box::new(Var("f".to_string())),
                                         Box::new([Int(3)]))),
                            Box::new(Int(4)),
-                           Box::new(Int(0)))));
+                           Box::new(Int(0))))));
     }
 
     #[test]
     fn test_comma() {
-        use nom::IResult;
         use syntax::Syntax::{Int, Tuple, Var};
         use syntax::{Syntax, IntBin};
         let x = || Var("x".to_string());
         let y = || Var("y".to_string());
         let z = || Var("z".to_string());
         let w = || Var("w".to_string());
-        assert_eq!(exp(b"x, y, (z, w)"),
-                   IResult::Done(
-                       &[0u8; 0][..],
+        assert_eq!(parse(b"x, y, (z, w)"),
+                   Ok(((&[][..]).into(),
                        Tuple(
                            Box::new([x(), y(),
-                                Tuple(
-                                    Box::new([z(), w()]))
-                           ]))));
-        assert_eq!(exp(b"x, 1 + 3"),
-                   IResult::Done(
-                       &[0u8; 0][..],
+                                     Tuple(
+                                         Box::new([z(), w()]))
+                           ])))));
+        assert_eq!(parse(b"x, 1 + 3"),
+                   Ok(((&[][..]).into(),
                        Tuple(
                            Box::new([x(),
-                                Syntax::IntBin(IntBin::Add,
-                                               Box::new(Int(1)),
-                                               Box::new(Int(3)))
-                           ]))));
+                                     Syntax::IntBin(IntBin::Add,
+                                                    Box::new(Int(1)),
+                                                    Box::new(Int(3)))
+                           ])))));
     }
 
     #[test]
     fn test_comp() {
-        use nom::IResult;
         use syntax::{Syntax, IntBin, CompBin};
         use syntax::Syntax::Int;
-        assert_eq!(exp(b"1 < 2 + 3"),
-                   IResult::Done(&[0u8; 0][..],
-                                 Syntax::Not(
-                                     Box::new(Syntax::CompBin(
-                                         CompBin::LE,
-                                         Box::new(Syntax::IntBin(
-                                             IntBin::Add,
-                                             Box::new(Int(2)),
-                                             Box::new(Int(3)))),
-                                         Box::new(Int(1)))))));
+        assert_eq!(parse(b"1 < 2 + 3"),
+                   Ok(((&[][..]).into(),
+                       Syntax::Not(
+                           Box::new(Syntax::CompBin(
+                               CompBin::LE,
+                               Box::new(Syntax::IntBin(
+                                   IntBin::Add,
+                                   Box::new(Int(2)),
+                                   Box::new(Int(3)))),
+                               Box::new(Int(1))))))));
 
-        assert_eq!(exp(b"4 <= 3"),
-                   IResult::Done(&[0u8; 0][..],
-                                 Syntax::CompBin(
-                                     CompBin::LE,
-                                     Box::new(Int(4)),
-                                     Box::new(Int(3)))));
-        assert_eq!(exp(b"4 >= 3"),
-                   IResult::Done(&[0u8; 0][..],
-                                 Syntax::CompBin(
-                                     CompBin::LE,
-                                     Box::new(Int(3)),
-                                     Box::new(Int(4)))));
-        assert_eq!(exp(b"4 > 3"),
-                   IResult::Done(&[0u8; 0][..],
-                                 Syntax::Not(Box::new(
-                                     Syntax::CompBin(
-                                         CompBin::LE,
-                                         Box::new(Int(4)),
-                                         Box::new(Int(3)))))));
-        assert_eq!(exp(b"4 = 3"),
-                   IResult::Done(&[0u8; 0][..],
-                                 Syntax::CompBin(
-                                     CompBin::Eq,
-                                     Box::new(Int(4)),
-                                     Box::new(Int(3)))));
-        assert_eq!(exp(b"4 <> 3"),
-                   IResult::Done(&[0u8; 0][..],
-                                 Syntax::Not(Box::new(
-                                     Syntax::CompBin(
-                                         CompBin::Eq,
-                                         Box::new(Int(4)),
-                                         Box::new(Int(3)))))));
+        assert_eq!(parse(b"4 <= 3"),
+                   Ok(((&[][..]).into(),
+                       Syntax::CompBin(
+                           CompBin::LE,
+                           Box::new(Int(4)),
+                           Box::new(Int(3))))));
+        assert_eq!(parse(b"4 >= 3"),
+                   Ok(((&[][..]).into(),
+                       Syntax::CompBin(
+                           CompBin::LE,
+                           Box::new(Int(3)),
+                           Box::new(Int(4))))));
+        assert_eq!(parse(b"4 > 3"),
+                   Ok(((&[][..]).into(),
+                       Syntax::Not(Box::new(
+                           Syntax::CompBin(
+                               CompBin::LE,
+                               Box::new(Int(4)),
+                               Box::new(Int(3))))))));
+        assert_eq!(parse(b"4 = 3"),
+                   Ok(((&[][..]).into(),
+                       Syntax::CompBin(
+                           CompBin::Eq,
+                           Box::new(Int(4)),
+                           Box::new(Int(3))))));
+        assert_eq!(parse(b"4 <> 3"),
+                   Ok(((&[][..]).into(),
+                       Syntax::Not(Box::new(
+                           Syntax::CompBin(
+                               CompBin::Eq,
+                               Box::new(Int(4)),
+                               Box::new(Int(3))))))));
     }
 
 
     #[test]
     fn test_mult() {
-        use nom::IResult;
         use syntax::Syntax;
         use syntax::Syntax::Var;
         use syntax::FloatBin;
-        assert_eq!(exp(b"x *. y"),
-                   IResult::Done(&[0u8; 0][..],
-                                 Syntax::FloatBin(
-                                     FloatBin::FMul,
-                                     Box::new(Var("x".to_string())),
-                                     Box::new(Var("y".to_string())))));
-        assert_eq!(exp(b"x /. y *. z"),
-                   IResult::Done(&[0u8; 0][..],
-                                 Syntax::FloatBin(
-                                     FloatBin::FMul,
-                                     Box::new(Syntax::FloatBin(
-                                         FloatBin::FDiv,
-                                         Box::new(Var("x".to_string())),
-                                         Box::new(Var("y".to_string())))),
-                                     Box::new(Var("z".to_string())))));
+        assert_eq!(parse(b"x *. y"),
+                   Ok(((&[][..]).into(),
+                       Syntax::FloatBin(
+                           FloatBin::FMul,
+                           Box::new(Var("x".to_string())),
+                           Box::new(Var("y".to_string()))))));
+        assert_eq!(parse(b"x /. y *. z"),
+                   Ok(((&[][..]).into(),
+                       Syntax::FloatBin(
+                           FloatBin::FMul,
+                           Box::new(Syntax::FloatBin(
+                               FloatBin::FDiv,
+                               Box::new(Var("x".to_string())),
+                               Box::new(Var("y".to_string())))),
+                           Box::new(Var("z".to_string()))))));
     }
 
     #[test]
     fn test_multadd() {
-        use nom::IResult;
         use syntax::Syntax;
         use syntax::Syntax::Var;
         use syntax::FloatBin;
-        assert_eq!(exp(b"x /. y +. z"),
-                   IResult::Done(&[0u8; 0][..],
-                                 Syntax::FloatBin(
-                                     FloatBin::FAdd,
-                                     Box::new(Syntax::FloatBin(
-                                         FloatBin::FDiv,
-                                         Box::new(Var("x".to_string())),
-                                         Box::new(Var("y".to_string())))),
-                                     Box::new(Var("z".to_string())))));
-        assert_eq!(exp(b"a -. b /. c"),
-                   IResult::Done(&[0u8; 0][..],
-                                 Syntax::FloatBin(
-                                     FloatBin::FSub,
-                                     Box::new(Var("a".to_string())),
-                                     Box::new(Syntax::FloatBin(
-                                         FloatBin::FDiv,
-                                         Box::new(Var("b".to_string())),
-                                         Box::new(Var("c".to_string())))))));
+        assert_eq!(parse(b"x /. y +. z"),
+                   Ok(((&[][..]).into(),
+                       Syntax::FloatBin(
+                           FloatBin::FAdd,
+                           Box::new(Syntax::FloatBin(
+                               FloatBin::FDiv,
+                               Box::new(Var("x".to_string())),
+                               Box::new(Var("y".to_string())))),
+                           Box::new(Var("z".to_string()))))));
+        assert_eq!(parse(b"a -. b /. c"),
+                   Ok(((&[][..]).into(),
+                       Syntax::FloatBin(
+                           FloatBin::FSub,
+                           Box::new(Var("a".to_string())),
+                           Box::new(Syntax::FloatBin(
+                               FloatBin::FDiv,
+                               Box::new(Var("b".to_string())),
+                               Box::new(Var("c".to_string()))))))));
     }
 
     #[test]
     fn test_unary_minus() {
-        use nom::IResult;
         use syntax::Syntax::{Int, Float, Neg, FNeg, Var};
-        assert_eq!(exp(b"-2"),
-                   IResult::Done(&[0u8; 0][..],
-                                 Neg(
-                                     Box::new(Int(2)))));
-        assert_eq!(exp(b"--2"),
-                   IResult::Done(&[0u8; 0][..],
-                                 Neg(
-                                     Box::new(Neg(
-                                         Box::new(Int(2)))))));
-        assert_eq!(exp(b"-.x"),
-                   IResult::Done(&[0u8; 0][..],
-                                 FNeg(
-                                     Box::new(Var("x".to_string())))));
+        assert_eq!(parse(b"-2"),
+                   Ok(((&[][..]).into(),
+                       Neg(Box::new(Int(2))))));
+        assert_eq!(parse(b"--2"),
+                   Ok(((&[][..]).into(),
+                       Neg(Box::new(Neg(
+                           Box::new(Int(2))))))));
+        assert_eq!(parse(b"-.x"),
+                   Ok(((&[][..]).into(),
+                       FNeg(
+                           Box::new(Var("x".to_string()))))));
         // - followed by float literal is ok.
-        assert_eq!(exp(b"-2.0"),
-                   IResult::Done(&[0u8; 0][..],
-                                 FNeg(
-                                     Box::new(Float(2.0.into())))));
+        assert_eq!(parse(b"-2.0"),
+                   Ok(((&[][..]).into(),
+                       FNeg(Box::new(Float(2.0.into()))))));
     }
 
     #[test]
     fn test_exp_not() {
-        use nom::IResult;
         use syntax::Syntax::{Bool, Not};
-        assert_eq!(exp(b"!!true"),
-                   IResult::Done(&[0u8; 0][..],
-                                 Not(
-                                     Box::new(Not(
-                                         Box::new(Bool(true)))))));
+        assert_eq!(parse(b"!!true"),
+                   Ok(((&[][..]).into(),
+                       Not(Box::new(Not(
+                           Box::new(Bool(true))))))));
     }
     
     #[test]
     fn test_app() {
-        use nom::IResult;
         use syntax::Syntax::{App, Int, Var};
-        assert_eq!(exp(b"func 0 1"),
-                   IResult::Done(&[0u8; 0][..],
-                                 App(
-                                     Box::new(Var("func".to_string())),
-                                     Box::new([Int(0), Int(1)]))));
+        assert_eq!(parse(b"func 0 1"),
+                   Ok(((&[][..]).into(),
+                       App(
+                           Box::new(Var("func".to_string())),
+                           Box::new([Int(0), Int(1)])))));
     }
 
     #[test]
     fn test_array_create() {
-        use nom::IResult;
         use syntax::Syntax::{Array, Int};
-        assert_eq!(exp(b"Array.create 2 3"),
-                   IResult::Done(&[0u8; 0][..],
-                                 Array(
-                                     Box::new(Int(2)),
-                                     Box::new(Int(3)))));
+        assert_eq!(parse(b"Array.create 2 3"),
+                   Ok(((&[][..]).into(),
+                       Array(
+                           Box::new(Int(2)),
+                           Box::new(Int(3))))));
     }
 }

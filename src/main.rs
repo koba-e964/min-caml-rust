@@ -7,11 +7,11 @@ use min_caml_rust::{id, parser, k_normal, typing,
                     alpha, beta, assoc, const_fold,
                     elim, inline, closure, x86};
 use min_caml_rust::syntax::Type;
-use nom::IResult;
-use std::collections::HashMap;
+use nom::Err;
 use std::path::Path;
 use std::fs::File;
 use std::io::Read;
+use std::collections::HashMap;
 
 const ITER_MAX: usize = 1000; // The max number of iteration
 
@@ -76,10 +76,11 @@ fn run(program: &[u8]) {
         Err(msg) => panic!(msg),
     };
     println!("comment-removed: {:?}", String::from_utf8(program.clone()));
-    let expr = match parser::exp(&program) {
-        IResult::Done(_, expr) => expr,
-        IResult::Incomplete(_) => panic!("incomplete"),
-        IResult::Error(alt) => panic!(format!("error: {:?}", alt)),
+    let expr = match parser::parse(&program) {
+        Ok((_, expr)) => expr,
+        Err(Err::Incomplete(_)) => panic!("incomplete"),
+        Err(Err::Error(alt)) => panic!(format!("error: {:?}", alt)),
+        Err(Err::Failure(alt)) => panic!(format!("failure: {:?}", alt)),
     };
     let expr = parser::uniquify(expr, &mut id_gen);
     println!("expr = {:?}", expr);
