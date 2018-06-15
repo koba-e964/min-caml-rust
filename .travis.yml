@@ -5,11 +5,9 @@ rust:
   - nightly
 install:
   - cargo install cargo-bloat
-  - cargo +nightly install clippy
 script:
   - cargo build --verbose
   - cargo test --verbose
   - ./check-test-mls.sh
   - cargo bloat --release -n 20
   - cargo bloat --release --crates
-  - cargo +nightly clippy
