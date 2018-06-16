@@ -10,7 +10,7 @@ pub fn parse(x: &[u8]) -> IResult<CompleteByteSlice, Syntax> {
     exp(CompleteByteSlice(x))
 }
 
-named!(simple_exp_no_index<CompleteByteSlice, Syntax>, alt_complete!(
+named!(simple_exp_no_index<CompleteByteSlice, Syntax>, alt!(
     ws!(do_parse!(tag!("(") >> res: exp >> tag!(")") >> (res))) |
     ws!(do_parse!(tag!("(") >> tag!(")") >> (Syntax::Unit))) |
     ws!(do_parse!(b: bool_lit >> (Syntax::Bool(b)))) |
@@ -47,9 +47,9 @@ named!(array_index_list<CompleteByteSlice, (Syntax, Vec<Syntax>)>,
        ))
 );
 
-named!(exp<CompleteByteSlice, Syntax>, ws!(exp_let));
+named!(exp<CompleteByteSlice, Syntax>, call!(exp_let));
 
-named!(exp_let<CompleteByteSlice, Syntax>, alt_complete!(
+named!(exp_let<CompleteByteSlice, Syntax>, alt!(
     ws!(do_parse!(
         tag!("let") >>
             id: ident >>
@@ -78,10 +78,10 @@ named!(exp_let<CompleteByteSlice, Syntax>, alt_complete!(
             e2: exp_let >>
             (Syntax::LetTuple(p.into_boxed_slice(), Box::new(e1), Box::new(e2)))
     )) |
-    ws!(exp_semicolon)
+    call!(exp_semicolon)
 ));
 
-named!(exp_let_after_if<CompleteByteSlice, Syntax>, alt_complete!(
+named!(exp_let_after_if<CompleteByteSlice, Syntax>, alt!(
     ws!(do_parse!(
         tag!("let") >>
             id: ident >>
@@ -110,7 +110,7 @@ named!(exp_let_after_if<CompleteByteSlice, Syntax>, alt_complete!(
             e2: exp_let_after_if >>
             (Syntax::LetTuple(p.into_boxed_slice(), Box::new(e1), Box::new(e2)))
     )) |
-    ws!(exp_if)
+    call!(exp_if)
 ));
 
 named!(pat<CompleteByteSlice, Vec<(String, Type)> >, ws!(do_parse!(
@@ -145,7 +145,7 @@ named!(formal_args<CompleteByteSlice, Vec<(String, Type)>>,
        ))
 );
 
-named!(exp_semicolon<CompleteByteSlice, Syntax>, alt_complete!(
+named!(exp_semicolon<CompleteByteSlice, Syntax>, alt!(
     ws!(do_parse!(
         e1: exp_if >>
             tag!(";") >>
@@ -153,10 +153,10 @@ named!(exp_semicolon<CompleteByteSlice, Syntax>, alt_complete!(
             (Syntax::Let(("_dummy".to_string(), Type::Unit),
                          Box::new(e1), Box::new(e2)))
     )) |
-    ws!(exp_if)
+    call!(exp_if)
 ));
 
-named!(exp_if<CompleteByteSlice, Syntax>, alt_complete!(
+named!(exp_if<CompleteByteSlice, Syntax>, alt!(
     ws!(do_parse!(
         tag!("if") >>
             e1: exp >>
@@ -166,10 +166,10 @@ named!(exp_if<CompleteByteSlice, Syntax>, alt_complete!(
             e3: exp_let_after_if >>
             (Syntax::If(Box::new(e1), Box::new(e2), Box::new(e3)))
     )) |
-    ws!(exp_assign)
+    call!(exp_assign)
 ));
 
-named!(exp_assign<CompleteByteSlice, Syntax>, alt_complete!(
+named!(exp_assign<CompleteByteSlice, Syntax>, alt!(
     ws!(do_parse!(
         base_indices: array_index_list >>
             tag!("<-") >>
@@ -183,10 +183,10 @@ named!(exp_assign<CompleteByteSlice, Syntax>, alt_complete!(
                 Syntax::Put(Box::new(base), Box::new(last), Box::new(e))
             })
     )) |
-    ws!(exp_comma)
+    call!(exp_comma)
 ));
 
-named!(exp_comma<CompleteByteSlice, Syntax>, alt_complete!(
+named!(exp_comma<CompleteByteSlice, Syntax>, alt!(
     ws!(do_parse!(
         init: exp_comparative >>
             res: fold_many1!(
@@ -196,7 +196,7 @@ named!(exp_comma<CompleteByteSlice, Syntax>, alt_complete!(
             ) >>
             (Syntax::Tuple(res.into_boxed_slice()))
     )) |
-    ws!(exp_comparative)
+    call!(exp_comparative)
 ));
 
 macro_rules! exp_binary_operator {
@@ -231,7 +231,7 @@ exp_binary_operator!(
     }
 );
 // (operator, negated, arguments flipped)
-named!(comp_op<CompleteByteSlice, (CompBin, bool, bool)>, alt_complete!(
+named!(comp_op<CompleteByteSlice, (CompBin, bool, bool)>, alt!(
     do_parse!(tag!("<=") >> ((CompBin::LE, false, false))) |
     do_parse!(tag!(">=") >> ((CompBin::LE, false, true))) |
     do_parse!(tag!("<>") >> ((CompBin::Eq, true, false))) |
@@ -247,7 +247,7 @@ exp_binary_operator!(
         Ok(op) => Syntax::IntBin(op, Box::new(acc), Box::new(arg)),
     }
 );
-named!(add_op<CompleteByteSlice, Result<IntBin, FloatBin>>, alt_complete!(
+named!(add_op<CompleteByteSlice, Result<IntBin, FloatBin>>, alt!(
     do_parse!(tag!("+.") >> (Err(FloatBin::FAdd))) |
     do_parse!(tag!("-.") >> (Err(FloatBin::FSub))) |
     do_parse!(tag!("+") >> (Ok(IntBin::Add))) |
@@ -262,12 +262,12 @@ exp_binary_operator!(
         Ok(op) => Syntax::IntBin(op, Box::new(acc), Box::new(arg)),
     }
 );
-named!(mult_op<CompleteByteSlice, Result<IntBin, FloatBin>>, alt_complete!(
+named!(mult_op<CompleteByteSlice, Result<IntBin, FloatBin>>, alt!(
     do_parse!(tag!("*.") >> (Err(FloatBin::FMul))) |
     do_parse!(tag!("/.") >> (Err(FloatBin::FDiv)))
 ));
 
-named!(exp_unary_minus<CompleteByteSlice, Syntax>, alt_complete!(
+named!(exp_unary_minus<CompleteByteSlice, Syntax>, alt!(
     ws!(do_parse!(
         tag!("-.") >>
             e: exp_unary_minus >>
@@ -281,14 +281,14 @@ named!(exp_unary_minus<CompleteByteSlice, Syntax>, alt_complete!(
                 _ => Syntax::Neg(Box::new(e))
             })
     )) |
-    ws!(exp_app)
+    call!(exp_app)
 ));
 
 
-named!(exp_app<CompleteByteSlice, Syntax>, alt_complete!(
+named!(exp_app<CompleteByteSlice, Syntax>, alt!(
     ws!(do_parse!(tag!("!") >> res: exp_app >> (Syntax::Not(Box::new(res))))) |
     ws!(do_parse!(
-        _init: alt_complete!(tag!("Array.create") | tag!("Array.make")) >>
+        _init: alt!(tag!("Array.create") | tag!("Array.make")) >>
             res: many1!(ws!(simple_exp)) >>
             ({
                 let mut res = res;
@@ -302,13 +302,13 @@ named!(exp_app<CompleteByteSlice, Syntax>, alt_complete!(
     )) |
     ws!(do_parse!(
         init: simple_exp >>
-            res: many1!(ws!(simple_exp)) >>
+            res: many1!(call!(simple_exp)) >>
             (Syntax::App(Box::new(init), res.into_boxed_slice()))
     )) |
-    ws!(simple_exp)
+    call!(simple_exp)
 ));
 
-named!(bool_lit<CompleteByteSlice, bool>, alt_complete!(
+named!(bool_lit<CompleteByteSlice, bool>, alt!(
     ws!(do_parse!(tag!("true") >> (true))) |
     ws!(do_parse!(tag!("false") >> (false)))
 ));
@@ -319,7 +319,7 @@ named!(int_lit<CompleteByteSlice, i64>, ws!(do_parse!(
 )));
 
 // TODO supports only digit+ . digit+
-named!(float_lit<CompleteByteSlice, f64>, alt_complete!(
+named!(float_lit<CompleteByteSlice, f64>, alt!(
     do_parse!(
         fstr: recognize!(do_parse!(
             _x: digit >>
@@ -774,6 +774,18 @@ mod tests {
     fn test_if() {
         use syntax::Syntax::{App, Int, If, Var};
         assert_eq!(parse(b"if f 3 then 4 else 0"),
+                   Ok(((&[][..]).into(),
+                       If(
+                           Box::new(App(Box::new(Var("f".to_string())),
+                                        Box::new([Int(3)]))),
+                           Box::new(Int(4)),
+                           Box::new(Int(0))))));
+    }
+
+    #[test]
+    fn test_if2() {
+        use syntax::Syntax::{App, Int, If, Var};
+        assert_eq!(parse(b" if f 3 then 4 else 0 "),
                    Ok(((&[][..]).into(),
                        If(
                            Box::new(App(Box::new(Var("f".to_string())),
