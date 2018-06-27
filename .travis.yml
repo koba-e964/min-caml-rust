@@ -1,13 +1,25 @@
 language: rust
-rust:
-  - stable
-  - beta
-  - nightly
+matrix:
+  include:
+    - rust: stable
+      env: RUST_CHANNEL=stable
+    - rust: beta
+      env: RUST_CHANNEL=beta
+    - rust: nightly
+      env: RUST_CHANNEL=nightly
 install:
   - cargo install cargo-bloat
+  - if [ $RUST_CHANNEL == "nightly" ]; then
+      cargo install +nightly clippy;
+      cargo install +nightly expand;
+    fi
 script:
   - cargo build --verbose
   - cargo test --verbose
   - ./check-test-mls.sh
   - cargo bloat --release -n 20
   - cargo bloat --release --crates
+  - if [ $RUST_CHANNEL == "nightly" ]; then
+      cargo +nightly clippy;
+      cargo +nightly expand --lib;
+    fi
