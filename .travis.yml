@@ -21,5 +21,5 @@ script:
   - cargo bloat --release --crates
   - if [ $RUST_CHANNEL == "nightly" ]; then
       cargo clippy;
-      cargo expand --lib;
+      cargo expand --lib | wc;
     fi
