@@ -37,6 +37,7 @@ pub enum Exp {
     Mov(String),
     Neg(String),
     IntOp(IntBin, String, IdOrImm),
+    // Ld(x, y, disp) -> dword ptr [x + y * disp]
     Ld(String, IdOrImm, i32),
     St(String, String, IdOrImm, i32),
     FMovD(String),
@@ -64,7 +65,7 @@ pub struct Fundef {
     pub ret: Type,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Prog(pub Box<[(id::L, f64)]>, pub Box<[Fundef]>, pub Asm);
 
 // Display
