@@ -36,16 +36,16 @@ fn g_p(env: &mut ConstEnv, e: Exp) -> Exp {
         // x + y = y + x
         Exp::IntOp(IntBin::Add, ref x, IdOrImm::V(ref y)) if env.contains_key(x) =>
             Exp::IntOp(IntBin::Add, y.clone(), IdOrImm::C(env[x])),
-        Exp::Ld(ref x, IdOrImm::V(ref y), i) if env.contains_key(y) =>
-            Exp::Ld(x.clone(), IdOrImm::C(env[y]), i),
-        Exp::St(ref x, ref y, IdOrImm::V(ref z), i) if env.contains_key(z) =>
-            Exp::St(x.clone(), y.clone(), IdOrImm::C(env[z]), i),
+        Exp::Ld(ref x, IdOrImm::V(ref y), imm) if env.contains_key(y) =>
+            Exp::Ld(x.clone(), IdOrImm::C(env[y]), imm),
+        Exp::St(ref x, ref y, IdOrImm::V(ref z), imm) if env.contains_key(z) =>
+            Exp::St(x.clone(), y.clone(), IdOrImm::C(env[z]), imm),
         Exp::LdDF(ref x, IdOrImm::V(ref y), i) if env.contains_key(y) =>
             Exp::LdDF(x.clone(), IdOrImm::C(env[y]), i),
         Exp::StDF(ref x, ref y, IdOrImm::V(ref z), i) if env.contains_key(z) =>
             Exp::StDF(x.clone(), y.clone(), IdOrImm::C(env[z]), i),
         Exp::IfComp(op, x, y_p, e1, e2) => {
-            if let &IdOrImm::V(ref y) = &y_p {
+            if let IdOrImm::V(ref y) = y_p {
                 if let Some(&env_y) = env.get(y) {
                     return Exp::IfComp(op, x, IdOrImm::C(env_y),
                                        invoke!(e1), invoke!(e2));
@@ -76,7 +76,7 @@ fn h(mut fundef: Fundef) -> Fundef {
 }
 
 pub fn f(Prog(data, fundefs, e): Prog) -> Prog {
-    Prog(data, fundefs.into_vec().into_iter().map(|fundef| h(fundef)).collect::<Vec<_>>().into_boxed_slice(),
+    Prog(data, fundefs.into_vec().into_iter().map(h).collect::<Vec<_>>().into_boxed_slice(),
          {
              let mut env = HashMap::new();
              let ans = g(&mut env, e);
