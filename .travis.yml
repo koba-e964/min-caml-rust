@@ -9,8 +9,8 @@ matrix:
       env: RUST_CHANNEL=nightly
 install:
   - cargo install cargo-bloat
+  - rustup component add clippy-preview
   - if [ $RUST_CHANNEL == "nightly" ]; then
-      cargo install clippy;
       cargo install cargo-expand;
     fi
 script:
@@ -19,7 +19,7 @@ script:
   - ./check-test-mls.sh
   - cargo bloat --release -n 20
   - cargo bloat --release --crates
+  - cargo clippy
   - if [ $RUST_CHANNEL == "nightly" ]; then
-      cargo clippy;
       cargo expand --lib | wc;
     fi
