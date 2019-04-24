@@ -7,6 +7,8 @@ matrix:
       env: RUST_CHANNEL=beta
     - rust: nightly
       env: RUST_CHANNEL=nightly
+  allow_failures:
+    - rust: nightly
 install:
   - cargo install cargo-bloat
   - rustup component add clippy
