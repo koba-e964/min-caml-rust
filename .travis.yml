@@ -9,7 +9,7 @@ matrix:
       env: RUST_CHANNEL=nightly
 install:
   - cargo install cargo-bloat
-  - rustup component add clippy-preview
+  - rustup component add clippy
   - if [ $RUST_CHANNEL == "nightly" ]; then
       cargo install cargo-expand;
     fi
