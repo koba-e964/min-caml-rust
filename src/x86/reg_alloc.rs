@@ -1,7 +1,8 @@
 use x86::asm;
 use x86::asm::{Asm, Exp, Prog, IdOrImm};
+use id;
 use id::IdGen;
-use syntax::{IntBin, Type};
+use syntax::{IntBin, FloatBin, Type};
 
 use std::collections::{HashMap, HashSet};
 
@@ -11,24 +12,26 @@ type Result<T> = std::result::Result<T, NoReg>;
 pub fn f(Prog(data, fundefs, e): Prog, id_gen: &mut IdGen) -> Prog {
     eprintln!("register allocation: may take some time (up to a few minutes, depending on the size of functions).");
     let fundefs_p = Box::new([]);//fundefs.into_iter().map(h).collect();
-    let (e_p, regenv_p) = g((id_gen.gen_tmp(&Type::Unit), Type::Unit),
+    let (e_p, regenv_p) = g(&(id_gen.gen_tmp(&Type::Unit), Type::Unit),
                             Asm::Ans(Exp::Nop),
                             &HashMap::new(),
-                            e);
+                            e, id_gen);
     Prog(data, fundefs_p, e_p)
 }
 
-fn g(dest: (String, Type), cont: Asm, regenv: &RegEnv, asm: Asm) -> (Asm, RegEnv) {
+fn g(dest: &(String, Type), cont: Asm, regenv: &RegEnv, asm: Asm,
+     id_gen: &mut IdGen) -> (Asm, RegEnv) {
     use x86::asm::Asm::{Ans, Let};
     match asm {
-        Ans(exp) => g_exp_with_restore(dest, cont, regenv, exp),
+        Ans(exp) => g_exp_with_restore(dest, cont, regenv, exp, id_gen),
         Let(x, y, exp, e) => {
             assert!(!regenv.contains_key(&x));
             let t = dest.1.clone();
             let cont_p = asm::concat((*e).clone(), dest.0.clone(), dest.1.clone(), cont.clone());
-            let (e1_p, regenv1) = g_exp_with_restore((x.clone(), t.clone()), cont_p.clone(), regenv,
-                                                     exp);
-            let (_call, targets) = target(x.clone(), dest.clone(), &cont_p);
+            let (e1_p, regenv1) = g_exp_with_restore(
+                &(x.clone(), t.clone()), cont_p.clone(), regenv,
+                exp, id_gen);
+            let (_call, targets) = target(&x, dest, &cont_p);
             let sources = source(&t, &e1_p);
             /* target first */
             let mut targets_sources = targets.clone();
@@ -37,7 +40,8 @@ fn g(dest: (String, Type), cont: Asm, regenv: &RegEnv, asm: Asm) -> (Asm, RegEnv
                 AllocResult::Spill(_) => panic!(),
                 AllocResult::Alloc(reg) => {
                     let (e2_p, regenv2) =
-                        g(dest, cont, &add(x.clone(), reg.clone(), regenv1), *e);
+                        g(dest, cont, &add(x.clone(), reg.clone(), regenv1), *e,
+                        id_gen);
                     (asm::concat(e1_p, reg, t, e2_p), regenv2)
                 }
             }
@@ -45,34 +49,172 @@ fn g(dest: (String, Type), cont: Asm, regenv: &RegEnv, asm: Asm) -> (Asm, RegEnv
     }
 }
 
-fn g_exp_with_restore(dest: (String, Type), cont: Asm, regenv: &RegEnv,
-                      exp: Exp) -> (Asm, RegEnv) {
-    match g_exp(dest.clone(), cont.clone(), regenv, exp.clone()) {
+fn g_exp_with_restore(dest: &(String, Type), cont: Asm, regenv: &RegEnv,
+                      exp: Exp, id_gen: &mut IdGen) -> (Asm, RegEnv) {
+    match g_exp(dest, cont.clone(), regenv, exp.clone(), id_gen) {
         Ok(result) => result,
         Err(NoReg(x, t)) =>
             g(dest, cont, regenv,
-              Asm::Let(x.clone(), t, Exp::Restore(x), Box::new(Asm::Ans(exp)))),
+              Asm::Let(x.clone(), t, Exp::Restore(x), Box::new(Asm::Ans(exp))),
+              id_gen),
     }
 }
 
-fn g_exp(dest: (String, Type), cont: Asm, regenv: &RegEnv,
-         exp: Exp) -> Result<(Asm, RegEnv)> {
-    panic!()
+// Register allocation for Exp
+fn g_exp(dest: &(String, Type), cont: Asm, regenv: &RegEnv,
+         exp: Exp, id_gen: &mut IdGen) -> Result<(Asm, RegEnv)> {
+    use self::Exp::*;
+    // On branches where retval.1 != regenv, an early return is done.
+    let asm = match exp {
+        Nop | Set(_) | SetL(_) | Comment(_) | Restore(_) =>
+            Asm::Ans(exp),
+        Mov(x) => Asm::Ans(Mov(find(&x, &Type::Int, regenv)?)),
+        Neg(x) => Asm::Ans(Neg(find(&x, &Type::Int, regenv)?)),
+        IntOp(op, x, y_p) =>
+            Asm::Ans(IntOp(op,
+                           find(&x, &Type::Int, regenv)?,
+                           find_p(&y_p, regenv)?)),
+        Ld(x, y_p, i) =>
+            Asm::Ans(Ld(find(&x, &Type::Int, regenv)?,
+                        find_p(&y_p, regenv)?, i)),
+        St(x, y, z_p, i) =>
+            Asm::Ans(St(find(&x, &Type::Int, regenv)?,
+                        find(&y, &Type::Int, regenv)?,
+                        find_p(&z_p, regenv)?, i)),
+        FMovD(x) => Asm::Ans(FMovD(find(&x, &Type::Float, regenv)?)),
+        FNegD(x) => Asm::Ans(FNegD(find(&x, &Type::Float, regenv)?)),
+        FloatOp(op, x, y) =>
+            Asm::Ans(FloatOp(op,
+                             find(&x, &Type::Float, regenv)?,
+                             find(&y, &Type::Float, regenv)?)),
+        LdDF(x, y_p, i) =>
+            Asm::Ans(LdDF(find(&x, &Type::Int, regenv)?,
+                          find_p(&y_p, regenv)?, i)),
+        StDF(x, y, z_p, i) =>
+            Asm::Ans(StDF(find(&x, &Type::Float, regenv)?,
+                          find(&y, &Type::Int, regenv)?,
+                          find_p(&z_p, regenv)?, i)),
+        Save(_x, _y) => unreachable!(),
+        IfComp(op, x, y_p, e1, e2) => {
+            let xcp = x.clone();
+            let y_pcp = y_p.clone();
+            let k = |e1_p, e2_p|
+            Ok(IfComp(op, find(&xcp, &Type::Int, regenv)?,
+                      find_p(&y_pcp, regenv)?,
+                      Box::new(e1_p), Box::new(e2_p)));
+            return g_exp_if(dest, cont, regenv, k, *e1, *e2, id_gen);
+        }
+        IfFComp(op, x, y, e1, e2) => {
+            let xcp = x.clone();
+            let ycp = y.clone();
+            let k = |e1_p, e2_p|
+            Ok(IfFComp(op, find(&xcp, &Type::Float, regenv)?,
+                       find(&ycp, &Type::Float, regenv)?,
+                       Box::new(e1_p), Box::new(e2_p)));
+            return g_exp_if(dest, cont, regenv, k, *e1, *e2, id_gen);
+        }
+        CallDir(id::L(x), ys, zs) => {
+            let regs = asm::regs();
+            let fregs = asm::fregs();
+            if ys.len() > regs.len() || zs.len() > fregs.len() {
+                panic!("cannot allocate registers for arguments to {}", x);
+            }
+            let k = |ys: Vec<_>, zs: Vec<_>|
+            Ok(CallDir(id::L(x.clone()), ys.into_boxed_slice(), zs.into_boxed_slice()));
+            return g_exp_call(dest, cont, regenv, k, ys.into_vec(), zs.into_vec(), id_gen);
+        }
+        _ => panic!(),
+    };
+    Ok((asm, regenv.clone()))
+    /*
+g' dest cont regenv = function (* 各命令のレジスタ割り当て (caml2html: regalloc_gprime) *)
+  | CallCls(x, ys, zs) as exp ->
+      if List.length ys > Array.length regs - 1 || List.length zs > Array.length fregs then
+        failwith (Format.sprintf "cannot allocate registers for arugments to %s" x)
+      else
+        g'_call dest cont regenv exp (fun ys zs -> CallCls(find x Type.Int regenv, ys, zs)) ys zs
+  | CallDir(Id.L(x), ys, zs) as exp ->
+      if List.length ys > Array.length regs || List.length zs > Array.length fregs then
+        failwith (Format.sprintf "cannot allocate registers for arugments to %s" x)
+      else
+        g'_call dest cont regenv exp (fun ys zs -> CallDir(Id.L(x), ys, zs)) ys zs
+        */
 }
 
-fn target(src: String, dest: (String, Type), asm: &Asm) -> (bool, Vec<String>) {
-    panic!();
+fn g_exp_if<F>(dest: &(String, Type), cont: Asm, regenv: &RegEnv,
+               constr: F, e1: Asm, e2: Asm, id_gen: &mut IdGen) -> Result<(Asm, RegEnv)>
+where F: Fn(Asm, Asm) -> Result<Exp> {
+    let (e1_p, regenv1) = g(dest, cont.clone(), regenv, e1, id_gen);
+    let (e2_p, regenv2) = g(dest, cont.clone(), regenv, e2, id_gen);
+    let mut regenv_intersect = HashMap::new();
+    for x in asm::fv(&cont) {
+        if asm::is_reg(&x) {
+            continue;
+        }
+        let r1 = regenv1.get(&x);
+        let r2 = regenv2.get(&x);
+        if let (Some(r1), Some(r2)) = (r1, r2) {
+            if r1 == r2 {
+                regenv_intersect.insert(x, r1.to_string());
+            }
+        }
+    }
+    let mut returned_e = Asm::Ans(constr(e1_p, e2_p)?);
+    for x in asm::fv(&cont) {
+        if x == dest.0 || !regenv.contains_key(&x) || regenv_intersect.contains_key(&x) {
+        } else {
+            returned_e = asm::seq(id_gen, Exp::Save(regenv.get(&x).unwrap().to_string(), x),
+                                  returned_e);
+        }
+    }
+    Ok((returned_e, regenv_intersect))
 }
 
-fn target_p(src: String, (dest, t): (String, Type), exp: &Exp) -> (bool, Vec<String>) {
+fn g_exp_call<F>(dest: &(String, Type), cont: Asm, regenv: &RegEnv,
+                 constr: F, ys: Vec<String>, zs: Vec<String>, id_gen: &mut IdGen) -> Result<(Asm, RegEnv)>
+where F: Fn(Vec<String>, Vec<String>) -> Result<Exp> {
+    let empty_regenv = HashMap::new();
+    // Note that Iterator<Result<A, E>> can be collected into Result<Vec<A>, E>.
+    let ys = ys.into_iter().map(|y| find(&y, &Type::Int, regenv)).collect::<Result<_>>()?;
+    let zs = zs.into_iter().map(|z| find(&z, &Type::Float, regenv)).collect::<Result<_>>()?;
+    let mut e = Asm::Ans(constr(ys, zs)?);
+    for x in asm::fv(&cont) {
+        if x == dest.0 || !regenv.contains_key(&x) {
+        } else {
+            e = asm::seq(id_gen, Exp::Save(regenv.get(&x).unwrap().to_string(),
+                                           x), e);
+        }
+    }
+    Ok((e, empty_regenv))
+}
+
+
+// TODO Understand this function
+// Register targeting. retval.0 is whether call is executed in asm.
+fn target(src: &str, dest: &(String, Type), asm: &Asm) -> (bool, Vec<String>) {
+    match asm {
+        Asm::Ans(ref exp) => target_exp(src, dest, exp),
+        Asm::Let(ref x, ref t, ref exp, ref e) => {
+            let (c1, mut rs1) = target_exp(src, &(x.clone(), t.clone()), exp);
+            if c1 {
+                return (true, rs1);
+            }
+            let (c2, rs2) = target(src, dest, e);
+            rs1.extend_from_slice(&rs2);
+            (c2, rs1)
+        }
+    }
+}
+
+fn target_exp(src: &str, (ref dest, ref t): &(String, Type), exp: &Exp) -> (bool, Vec<String>) {
     use self::Exp::*;
     match exp {
         Mov(ref x) if x == &src && asm::is_reg(&dest) => {
-            assert_ne!(t, Type::Unit);
-            assert_ne!(t, Type::Float);
-            (false, vec![dest])
+            assert_ne!(t, &Type::Unit);
+            assert_ne!(t, &Type::Float);
+            (false, vec![dest.clone()])
         },
-        _ => panic!(),
+        _ => (false, vec![]),
     }
     /*
   | FMovD(x) when x = src && is_reg dest ->
@@ -109,8 +251,34 @@ fn source_exp(t: &Type, exp: &Exp) -> Vec<String> {
     use self::Exp::*;
     match exp {
         Mov(ref x) | Neg(ref x) | IntOp(IntBin::Add, ref x, IdOrImm::C(_))
-            | IntOp(IntBin::Sub, ref x, _) => vec![x.clone()],
-        _ => panic!(),
+            | IntOp(IntBin::Sub, ref x, _)
+            | FMovD(ref x) | FNegD(ref x)
+            | FloatOp(FloatBin::FSub, ref x, _)
+            | FloatOp(FloatBin::FDiv, ref x, _) => vec![x.clone()],
+        IntOp(IntBin::Add, ref x, IdOrImm::V(ref y))
+            | FloatOp(FloatBin::FAdd, ref x, ref y)
+            | FloatOp(FloatBin::FMul, ref x, ref y) =>
+            vec![x.clone(), y.clone()],
+        IfComp(_, _, _, ref e1, ref e2) => {
+            let mut ans1 = source(t, e1);
+            let ans2 = source(t, e2);
+            ans1.extend_from_slice(&ans2);
+            ans1
+        }
+        CallCls(..) | CallDir(..) => match t {
+            Type::Unit => vec![],
+            Type::Float => {
+                let mut v = asm::fregs();
+                v.truncate(1);
+                v
+            }
+            _ => {
+                let mut v = asm::regs();
+                v.truncate(1);
+                v
+            }
+        }
+        _ => vec![],
     }
 }
 
@@ -176,7 +344,7 @@ fn alloc(cont: Asm, regenv: &RegEnv, x: String, t: Type,
         }
     }
     // Find a register that is not alive
-    let mut r = preference.iter().chain(all.iter())
+    let r = preference.iter().chain(all.iter())
         .find(|&r| !live.contains(r));
     match r {
         Some(r) => {
