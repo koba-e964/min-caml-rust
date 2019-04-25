@@ -247,6 +247,14 @@ pub fn seq(id_gen: &mut id::IdGen, e1: Exp, e2: Asm) -> Asm {
 
 const REGS: [&str; 6] = ["%eax", "%ebx", "%ecx", "%edx", "%esi", "%edi"];
 
+pub fn regs() -> Vec<String> {
+    let mut res = vec!["".to_string(); 6];
+    for i in 0..6 {
+        res[i] = REGS[i].to_string();
+    }
+    res
+}
+
 pub fn fregs() -> Vec<String> {
     let mut res = vec!["".to_string(); 8];
     for (i, item) in res.iter_mut().enumerate() {

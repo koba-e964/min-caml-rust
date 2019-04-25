@@ -111,5 +111,7 @@ fn run(program: &[u8]) {
     println!();
     let simm = x86::simm::f(virtual_asm);
     println!("simm = {}", simm);
+    let reg_alloc = x86::reg_alloc::f(simm, &mut id_gen);
+    println!("reg_alloc = {}", reg_alloc);
     println!();
 }
