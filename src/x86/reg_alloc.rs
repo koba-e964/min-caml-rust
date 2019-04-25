@@ -24,9 +24,8 @@ fn g(dest: &(String, Type), cont: Asm, regenv: &RegEnv, asm: Asm,
     use x86::asm::Asm::{Ans, Let};
     match asm {
         Ans(exp) => g_exp_with_restore(dest, cont, regenv, exp, id_gen),
-        Let(x, y, exp, e) => {
+        Let(x, t, exp, e) => {
             assert!(!regenv.contains_key(&x));
-            let t = dest.1.clone();
             let cont_p = asm::concat((*e).clone(), dest.0.clone(), dest.1.clone(), cont.clone());
             let (e1_p, regenv1) = g_exp_with_restore(
                 &(x.clone(), t.clone()), cont_p.clone(), regenv,
