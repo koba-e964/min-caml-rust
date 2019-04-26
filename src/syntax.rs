@@ -35,15 +35,20 @@ pub struct Fundef {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum IntBin {
-    Add, Sub,
+    Add,
+    Sub,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FloatBin {
-    FAdd, FSub, FMul, FDiv,
+    FAdd,
+    FSub,
+    FMul,
+    FDiv,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CompBin {
-    Eq, LE,
+    Eq,
+    LE,
 }
 
 // type.ml
@@ -69,7 +74,7 @@ impl Type {
             Float => write!(f, "float"),
             Fun(argty, retty) => {
                 write!(f, "{{")?;
-                for i in 0 .. argty.len() {
+                for i in 0..argty.len() {
                     write!(f, "{}", argty[i])?;
                     if i < argty.len() - 1 {
                         write!(f, ", ")?;
@@ -77,12 +82,12 @@ impl Type {
                 }
                 write!(f, "}}")?;
                 write!(f, " -> {}", retty)
-            },
+            }
             Tuple(xs) => {
                 if parens {
                     write!(f, "(")?;
                 }
-                for i in 0 .. xs.len() {
+                for i in 0..xs.len() {
                     xs[i].fmt_sub(f, true)?;
                     if i < xs.len() - 1 {
                         write!(f, " * ")?;
@@ -92,9 +97,8 @@ impl Type {
                     write!(f, ")")?;
                 }
                 Ok(())
-            },
-            Array(x) =>
-                write!(f, "[{}]", x),
+            }
+            Array(x) => write!(f, "[{}]", x),
             Var(n) => write!(f, "v{}", n),
         }
     }
