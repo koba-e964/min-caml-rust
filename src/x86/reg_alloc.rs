@@ -10,7 +10,7 @@ type RegEnv = HashMap<String, String>;
 type Result<T> = std::result::Result<T, NoReg>;
 
 pub fn f(Prog(data, fundefs, e): Prog, id_gen: &mut IdGen) -> Prog {
-    eprintln!("register allocation: may take some time (up to a few minutes, depending on the size of functions).");
+    println!("register allocation: may take some time (up to a few minutes, depending on the size of functions).");
     let fundefs_p = fundefs.into_vec().into_iter().map(|f| h(f, id_gen)).collect();
     let (e_p, _regenv_p) = g(&(id_gen.gen_tmp(&Type::Unit), Type::Unit),
                             Asm::Ans(Exp::Nop),
@@ -73,7 +73,17 @@ fn g(dest: &(String, Type), cont: Asm, regenv: &RegEnv, asm: Asm,
             let mut targets_sources = targets.clone();
             targets_sources.extend_from_slice(&sources);
             match alloc(cont_p, &regenv1, x.clone(), t.clone(), &targets_sources) {
-                AllocResult::Spill(_) => unimplemented!(),
+                AllocResult::Spill(y) => {
+                    let r = regenv1[&y].clone();
+                    let (e2_p, regenv2) = g(dest, cont,
+                                            &add(x.clone(), r.clone(), regenv1),
+                                            *e, id_gen);
+                    let save = match regenv.get(&y) {
+                        Some(var) => Exp::Save(var.clone(), y),
+                        None => Exp::Nop,
+                    };
+                    (asm::seq(id_gen, save, asm::concat(e1_p, r, t, e2_p)), regenv2)
+                }
                 AllocResult::Alloc(reg) => {
                     let (e2_p, regenv2) =
                         g(dest, cont, &add(x.clone(), reg.clone(), regenv1), *e,
@@ -380,7 +390,7 @@ fn alloc(cont: Asm, regenv: &RegEnv, x: String, t: Type,
         .find(|&r| !live.contains(r));
     match r {
         Some(r) => {
-            eprintln!("allocated {} to {}", x, r);
+            println!("allocated {} to {}", x, r);
             AllocResult::Alloc(r.to_string())
         }
         None => {
@@ -391,7 +401,7 @@ fn alloc(cont: Asm, regenv: &RegEnv, x: String, t: Type,
                           Some(reg) => all.contains(reg),
                           None => false,
                       }).unwrap();
-            eprintln!("spilling {} from {}.", y, regenv[y]);
+            println!("spilling {} from {}.", y, regenv[y]);
             AllocResult::Spill(y.to_string())
         }
     }
