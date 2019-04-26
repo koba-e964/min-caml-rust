@@ -1,5 +1,5 @@
 use x86::asm;
-use x86::asm::{Asm, Exp, Prog, IdOrImm};
+use x86::asm::{Asm, Exp, Prog, IdOrImm, Fundef};
 use id;
 use id::IdGen;
 use syntax::{IntBin, FloatBin, Type};
@@ -11,12 +11,49 @@ type Result<T> = std::result::Result<T, NoReg>;
 
 pub fn f(Prog(data, fundefs, e): Prog, id_gen: &mut IdGen) -> Prog {
     eprintln!("register allocation: may take some time (up to a few minutes, depending on the size of functions).");
-    let fundefs_p = Box::new([]);//fundefs.into_iter().map(h).collect();
+    let fundefs_p = fundefs.into_vec().into_iter().map(|f| h(f, id_gen)).collect();
     let (e_p, regenv_p) = g(&(id_gen.gen_tmp(&Type::Unit), Type::Unit),
                             Asm::Ans(Exp::Nop),
                             &HashMap::new(),
                             e, id_gen);
     Prog(data, fundefs_p, e_p)
+}
+
+// Register allocation for Fundef
+// (caml2html: regalloc_h)
+fn h(Fundef { name: id::L(x), args: ys, fargs: zs, body: e, ret: t }: Fundef,
+     id_gen: &mut IdGen) -> Fundef {
+    let mut regenv = HashMap::new();
+    regenv.insert(x.clone(), asm::reg_cl().to_string());
+    let regs = asm::regs();
+    let fregs = asm::fregs(); 
+    let mut arg_regs = vec![];
+    let mut farg_regs = vec![];
+    for i in 0..ys.len() {
+        let y = ys[i].clone();
+        let r = regs[i].clone();
+        arg_regs.push(r.clone());
+        assert!(!asm::is_reg(&y));
+        regenv.insert(y, r);
+    }
+    for i in 0..zs.len() {
+        let z = zs[i].clone();
+        let fr = fregs[i].clone();
+        farg_regs.push(fr.clone());
+        assert!(!asm::is_reg(&z));
+        regenv.insert(z, fr);
+    }
+    let target = match t {
+        Type::Unit => id_gen.gen_tmp(&Type::Unit),
+        Type::Float => fregs[0].clone(),
+        _ => regs[0].clone(),
+    };
+    let (e_p, _regenv_p) = g(&(target.clone(), t.clone()),
+                            Asm::Ans(Exp::Mov(target)), &regenv, e, id_gen);
+    Fundef { name: id::L(x),
+             args: arg_regs.into_boxed_slice(),
+             fargs: farg_regs.into_boxed_slice(),
+             body: e_p, ret: t }
 }
 
 fn g(dest: &(String, Type), cont: Asm, regenv: &RegEnv, asm: Asm,
