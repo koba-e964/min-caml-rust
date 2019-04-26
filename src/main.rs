@@ -3,51 +3,60 @@ extern crate min_caml_rust;
 extern crate lazy_static;
 extern crate nom;
 
-use min_caml_rust::{id, parser, k_normal, typing,
-                    alpha, beta, assoc, const_fold,
-                    elim, inline, closure, x86};
 use min_caml_rust::syntax::Type;
+use min_caml_rust::{
+    alpha, assoc, beta, closure, const_fold, elim, id, inline, k_normal, parser, typing, x86,
+};
 use nom::Err;
-use std::path::Path;
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
-use std::collections::HashMap;
+use std::path::Path;
 
 const ITER_MAX: usize = 1000; // The max number of iteration
 
-
 lazy_static! {
-    static ref EXTENV: HashMap<String, Type>
-        = vec![("sin".to_string(),
-                Type::Fun(Box::new([Type::Float]),
-                          Box::new(Type::Float))),
-               ("cos".to_string(),
-                Type::Fun(Box::new([Type::Float]),
-                          Box::new(Type::Float))),
-               ("sqrt".to_string(),
-                Type::Fun(Box::new([Type::Float]),
-                          Box::new(Type::Float))),
-               ("abs_float".to_string(),
-                Type::Fun(Box::new([Type::Float]),
-                          Box::new(Type::Float))),
-               ("truncate".to_string(),
-                Type::Fun(Box::new([Type::Float]),
-                          Box::new(Type::Int))),
-               ("int_of_float".to_string(),
-                Type::Fun(Box::new([Type::Float]),
-                          Box::new(Type::Int))),
-               ("float_of_int".to_string(),
-                Type::Fun(Box::new([Type::Int]),
-                          Box::new(Type::Float))),
-               ("print_int".to_string(),
-                Type::Fun(Box::new([Type::Int]),
-                          Box::new(Type::Unit))),
-               ("print_newline".to_string(),
-                Type::Fun(Box::new([Type::Unit]),
-                          Box::new(Type::Unit))),
-        ].into_iter().collect();
+    static ref EXTENV: HashMap<String, Type> = vec![
+        (
+            "sin".to_string(),
+            Type::Fun(Box::new([Type::Float]), Box::new(Type::Float))
+        ),
+        (
+            "cos".to_string(),
+            Type::Fun(Box::new([Type::Float]), Box::new(Type::Float))
+        ),
+        (
+            "sqrt".to_string(),
+            Type::Fun(Box::new([Type::Float]), Box::new(Type::Float))
+        ),
+        (
+            "abs_float".to_string(),
+            Type::Fun(Box::new([Type::Float]), Box::new(Type::Float))
+        ),
+        (
+            "truncate".to_string(),
+            Type::Fun(Box::new([Type::Float]), Box::new(Type::Int))
+        ),
+        (
+            "int_of_float".to_string(),
+            Type::Fun(Box::new([Type::Float]), Box::new(Type::Int))
+        ),
+        (
+            "float_of_int".to_string(),
+            Type::Fun(Box::new([Type::Int]), Box::new(Type::Float))
+        ),
+        (
+            "print_int".to_string(),
+            Type::Fun(Box::new([Type::Int]), Box::new(Type::Unit))
+        ),
+        (
+            "print_newline".to_string(),
+            Type::Fun(Box::new([Type::Unit]), Box::new(Type::Unit))
+        ),
+    ]
+    .into_iter()
+    .collect();
 }
-
 
 fn main() {
     println!("Mitou Min-Caml Compiler (C) Eijiro Sumii\n (Port to Rust)");
@@ -95,7 +104,7 @@ fn run(program: &[u8]) {
     let alpha = alpha::f(k_normal.0, &mut id_gen);
     println!("alpha = {}", alpha);
     let mut e = alpha;
-    for i in 0 .. ITER_MAX {
+    for i in 0..ITER_MAX {
         let new_e = elim::f(const_fold::f(assoc::f(beta::f(e.clone())), &mut id_gen));
         let new_e = inline::f(new_e, &mut id_gen, 50);
         if e == new_e {
@@ -111,5 +120,7 @@ fn run(program: &[u8]) {
     println!();
     let simm = x86::simm::f(virtual_asm);
     println!("simm = {}", simm);
+    let reg_alloc = x86::reg_alloc::f(simm, &mut id_gen);
+    println!("reg_alloc = {}", reg_alloc);
     println!();
 }

@@ -1,6 +1,6 @@
-use syntax::{Syntax, Fundef, Type};
 use id::IdGen;
 use std::collections::HashMap;
+use syntax::{Fundef, Syntax, Type};
 
 /**
  * typing.rs (typing.ml in original min-caml)
@@ -19,20 +19,25 @@ enum TypingError {
 
 fn deref_typ(e: &Type, tyenv: &HashMap<usize, Type>) -> Type {
     macro_rules! deref_typ_list {
-        ($ls:expr) => ($ls.iter().map(|x| deref_typ(x, tyenv))
-                       .collect::<Vec<_>>()
-                       .into_boxed_slice());
+        ($ls:expr) => {
+            $ls.iter()
+                .map(|x| deref_typ(x, tyenv))
+                .collect::<Vec<_>>()
+                .into_boxed_slice()
+        };
     }
     match e {
-        Type::Fun(t1s, t2) =>
-            Type::Fun(deref_typ_list!(t1s), Box::new(deref_typ(t2, tyenv))),
+        Type::Fun(t1s, t2) => Type::Fun(deref_typ_list!(t1s), Box::new(deref_typ(t2, tyenv))),
         Type::Tuple(ts) => Type::Tuple(deref_typ_list!(ts)),
         Type::Array(t) => Type::Array(Box::new(deref_typ(t, tyenv))),
         Type::Var(n) => {
             if let Some(t) = tyenv.get(n) {
                 deref_typ(t, tyenv)
             } else {
-                println!("uninstantiated type variable {} detected; assuming int@.", n);
+                println!(
+                    "uninstantiated type variable {} detected; assuming int@.",
+                    n
+                );
                 Type::Int
             }
         }
@@ -42,7 +47,9 @@ fn deref_typ(e: &Type, tyenv: &HashMap<usize, Type>) -> Type {
 
 fn deref_term(e: &Syntax, tyenv: &HashMap<usize, Type>) -> Syntax {
     macro_rules! invoke {
-        ($e:expr) => (deref_term($e, tyenv));
+        ($e:expr) => {
+            deref_term($e, tyenv)
+        };
     }
     /*
      * Recursively apply deref_term to inside constructors of form C(e1, e2, ...).
@@ -58,47 +65,58 @@ fn deref_term(e: &Syntax, tyenv: &HashMap<usize, Type>) -> Syntax {
      * ($constr, $($e)*)
      */
     macro_rules! pack_bin {
-        ($constr:expr, $op:expr, $e1:expr, $e2:expr) =>
-            ({ $constr(*$op, Box::new(invoke!($e1)), Box::new(invoke!($e2))) })
+        ($constr:expr, $op:expr, $e1:expr, $e2:expr) => {{
+            $constr(*$op, Box::new(invoke!($e1)), Box::new(invoke!($e2)))
+        }};
     }
     macro_rules! boxed_array {
-        ($ls:expr) => ($ls.iter().map(|x| invoke!(x)).collect::<Vec<_>>()
-                       .into_boxed_slice());
+        ($ls:expr) => {
+            $ls.iter()
+                .map(|x| invoke!(x))
+                .collect::<Vec<_>>()
+                .into_boxed_slice()
+        };
     }
     match e {
         Syntax::Not(e) => pack!(Syntax::Not, e),
         Syntax::Neg(e) => pack!(Syntax::Neg, e),
-        Syntax::IntBin(op, e1, e2) =>
-            pack_bin!(Syntax::IntBin, op, e1, e2),
+        Syntax::IntBin(op, e1, e2) => pack_bin!(Syntax::IntBin, op, e1, e2),
         Syntax::FNeg(e) => pack!(Syntax::FNeg, e),
-        Syntax::FloatBin(op, e1, e2) =>
-            pack_bin!(Syntax::FloatBin, op, e1, e2),
-        Syntax::CompBin(op, e1, e2) =>
-            pack_bin!(Syntax::CompBin, op, e1, e2),
+        Syntax::FloatBin(op, e1, e2) => pack_bin!(Syntax::FloatBin, op, e1, e2),
+        Syntax::CompBin(op, e1, e2) => pack_bin!(Syntax::CompBin, op, e1, e2),
         Syntax::If(e1, e2, e3) => pack!(Syntax::If, e1, e2, e3),
-        Syntax::Let((x, t), e1, e2) =>
-            Syntax::Let((x.clone(), deref_typ(t, tyenv)), Box::new(invoke!(e1)),
-                        Box::new(invoke!(e2))),
+        Syntax::Let((x, t), e1, e2) => Syntax::Let(
+            (x.clone(), deref_typ(t, tyenv)),
+            Box::new(invoke!(e1)),
+            Box::new(invoke!(e2)),
+        ),
         Syntax::LetRec(fundef, e2) => {
             let (x, t) = &fundef.name;
             let yts = &fundef.args;
             let e1 = &fundef.body;
-            Syntax::LetRec(Fundef {
-                name: (x.to_string(), deref_typ(t, tyenv)),
-                args: yts.iter()
-                    .map(|(x, t)| (x.clone(), deref_typ(t, tyenv)))
-                    .collect::<Vec<_>>()
-                    .into_boxed_slice(),
-                body: Box::new(invoke!(e1))
-            }, Box::new(invoke!(e2)))
-        },
-        Syntax::App(e, es) =>
-            Syntax::App(Box::new(invoke!(e)), boxed_array!(es)),
+            Syntax::LetRec(
+                Fundef {
+                    name: (x.to_string(), deref_typ(t, tyenv)),
+                    args: yts
+                        .iter()
+                        .map(|(x, t)| (x.clone(), deref_typ(t, tyenv)))
+                        .collect::<Vec<_>>()
+                        .into_boxed_slice(),
+                    body: Box::new(invoke!(e1)),
+                },
+                Box::new(invoke!(e2)),
+            )
+        }
+        Syntax::App(e, es) => Syntax::App(Box::new(invoke!(e)), boxed_array!(es)),
         Syntax::Tuple(es) => Syntax::Tuple(boxed_array!(es)),
         Syntax::LetTuple(xts, e1, e2) => {
-            let xts: Box<_> = xts.iter().map(|(x, t)| (x.clone(), deref_typ(t, tyenv))).collect::<Vec<_>>().into_boxed_slice();
+            let xts: Box<_> = xts
+                .iter()
+                .map(|(x, t)| (x.clone(), deref_typ(t, tyenv)))
+                .collect::<Vec<_>>()
+                .into_boxed_slice();
             Syntax::LetTuple(xts, Box::new(invoke!(e1)), Box::new(invoke!(e2)))
-        },
+        }
         Syntax::Array(e1, e2) => pack!(Syntax::Array, e1, e2),
         Syntax::Get(e1, e2) => pack!(Syntax::Get, e1, e2),
         Syntax::Put(e1, e2, e3) => pack!(Syntax::Put, e1, e2, e3),
@@ -111,7 +129,9 @@ fn deref_term(e: &Syntax, tyenv: &HashMap<usize, Type>) -> Syntax {
  */
 fn occur(r1: usize, ty: &Type) -> bool {
     macro_rules! occur_list {
-        ($ls:expr) => ($ls.iter().any(|ty| occur(r1, ty)))
+        ($ls:expr) => {
+            $ls.iter().any(|ty| occur(r1, ty))
+        };
     }
     match ty {
         Type::Fun(t2s, t2) => occur_list!(t2s) || occur(r1, t2),
@@ -122,12 +142,17 @@ fn occur(r1: usize, ty: &Type) -> bool {
     }
 }
 
-fn unify(t1: &Type, t2: &Type,
-         extenv: &mut HashMap<String, Type>,
-         tyenv: &mut HashMap<usize, Type>) -> Result<(), TypingError> {
+fn unify(
+    t1: &Type,
+    t2: &Type,
+    extenv: &mut HashMap<String, Type>,
+    tyenv: &mut HashMap<usize, Type>,
+) -> Result<(), TypingError> {
     println!("unify {:?} {:?}", t1, t2);
     macro_rules! invoke {
-        ($t1:expr, $t2:expr) => (unify($t1, $t2, extenv, tyenv));
+        ($t1:expr, $t2:expr) => {
+            unify($t1, $t2, extenv, tyenv)
+        };
     }
     macro_rules! unify_seq {
         ($t1s:expr, $t2s: expr) => {
@@ -136,10 +161,10 @@ fn unify(t1: &Type, t2: &Type,
             if n != m {
                 return Err(TypingError::Unify(t1.clone(), t2.clone()));
             }
-            for i in 0 .. n {
+            for i in 0..n {
                 try!(invoke!(&$t1s[i], &$t2s[i]));
             }
-        }
+        };
     }
     match (t1, t2) {
         (Type::Unit, Type::Unit) => Ok(()),
@@ -149,11 +174,11 @@ fn unify(t1: &Type, t2: &Type,
         (Type::Fun(t1s, t1cod), Type::Fun(t2s, t2cod)) => {
             unify_seq!(t1s, t2s);
             invoke!(t1cod, t2cod)
-        },
+        }
         (Type::Tuple(t1s), Type::Tuple(t2s)) => {
             unify_seq!(t1s, t2s);
             Ok(())
-        },
+        }
         (Type::Array(t1), Type::Array(t2)) => invoke!(t1, t2),
         (Type::Var(n1), Type::Var(n2)) if n1 == n2 => Ok(()),
         (Type::Var(n1), _) => {
@@ -166,34 +191,40 @@ fn unify(t1: &Type, t2: &Type,
                 tyenv.insert(*n1, t2.clone());
                 Ok(())
             }
-        },
+        }
         (_, Type::Var(_)) => invoke!(t2, t1),
         _ => Err(TypingError::Unify(t1.clone(), t2.clone())),
     }
 }
 
-
-fn g(env: &HashMap<String, Type>, e: &Syntax,
-     extenv: &mut HashMap<String, Type>,
-     tyenv: &mut HashMap<usize, Type>,
-     id_gen: &mut IdGen) -> Result<Type, TypingError> {
+fn g(
+    env: &HashMap<String, Type>,
+    e: &Syntax,
+    extenv: &mut HashMap<String, Type>,
+    tyenv: &mut HashMap<usize, Type>,
+    id_gen: &mut IdGen,
+) -> Result<Type, TypingError> {
     macro_rules! invoke {
-        ($env:expr, $e:expr) => (g($env, $e, extenv, tyenv, id_gen));
+        ($env:expr, $e:expr) => {
+            g($env, $e, extenv, tyenv, id_gen)
+        };
     }
     macro_rules! typed {
-        ($e:expr, $ty:expr) => (try!(unify(&$ty, &try!(invoke!(env, $e)), extenv, tyenv)));
+        ($e:expr, $ty:expr) => {
+            try!(unify(&$ty, &try!(invoke!(env, $e)), extenv, tyenv))
+        };
     }
     /* map (g env) to an &[Syntax]
      * &[Syntax] -> Box<[Type]>
      */
     macro_rules! g_seq {
-        ($es:expr) => ({
+        ($es:expr) => {{
             let mut argtype = Vec::new();
             for e in $es.iter() {
                 argtype.push(try!(invoke!(env, e)));
             }
             argtype.into_boxed_slice()
-        });
+        }};
     }
     match e {
         Syntax::Unit => Ok(Type::Unit),
@@ -203,55 +234,60 @@ fn g(env: &HashMap<String, Type>, e: &Syntax,
         Syntax::Not(e) => {
             typed!(e, Type::Bool);
             Ok(Type::Bool)
-        },
+        }
         Syntax::Neg(e) => {
             typed!(e, Type::Int);
             Ok(Type::Int)
-        },
+        }
         Syntax::IntBin(_, e1, e2) => {
             typed!(e1, Type::Int);
             typed!(e2, Type::Int);
             Ok(Type::Int)
-        },
+        }
         Syntax::FNeg(e) => {
             typed!(e, Type::Float);
             Ok(Type::Float)
-        },
+        }
         Syntax::FloatBin(_, e1, e2) => {
             typed!(e1, Type::Float);
             typed!(e2, Type::Float);
             Ok(Type::Float)
-        },
+        }
         Syntax::CompBin(_, e1, e2) => {
-            try!(unify(&try!(invoke!(env, e1)), &try!(invoke!(env, e2)),
-                       extenv, tyenv));
+            try!(unify(
+                &try!(invoke!(env, e1)),
+                &try!(invoke!(env, e2)),
+                extenv,
+                tyenv
+            ));
             Ok(Type::Bool)
-        },
+        }
         Syntax::If(e1, e2, e3) => {
             typed!(e1, Type::Bool);
             let t2 = try!(invoke!(env, e2));
             let t3 = try!(invoke!(env, e3));
             try!(unify(&t2, &t3, extenv, tyenv));
             Ok(t2)
-        },
+        }
         Syntax::Let((x, t), e1, e2) => {
             typed!(e1, t);
             let mut cp_env = env.clone();
             cp_env.insert(x.to_string(), t.clone());
             invoke!(&cp_env, e2)
-        },
+        }
         Syntax::Var(x) => {
             if let Some(t) = env.get(x).cloned() {
                 Ok(t)
             } else if let Some(t) = extenv.get(x).cloned() {
                 Ok(t)
-            } else { // Inference of an external function
+            } else {
+                // Inference of an external function
                 println!("free variable {} assumed as external@.", x);
                 let t = id_gen.gen_type();
                 extenv.insert(x.to_string(), t.clone());
                 Ok(t)
             }
-        },
+        }
         Syntax::LetRec(fundef, e2) => {
             let (x, t) = fundef.name.clone();
             let yts = &fundef.args;
@@ -262,34 +298,46 @@ fn g(env: &HashMap<String, Type>, e: &Syntax,
             for (x, t) in yts.iter() {
                 cp_env_body.insert(x.to_string(), t.clone());
             }
-            try!(unify(&t,
-                       &Type::Fun(yts.iter()
-                                  .map(|xt| xt.1.clone())
-                                  .collect::<Vec<_>>()
-                                  .into_boxed_slice(), // List.map snd yts
-                                 Box::new(try!(invoke!(&cp_env_body, &e1)))),
-                       extenv, tyenv));
+            try!(unify(
+                &t,
+                &Type::Fun(
+                    yts.iter()
+                        .map(|xt| xt.1.clone())
+                        .collect::<Vec<_>>()
+                        .into_boxed_slice(), // List.map snd yts
+                    Box::new(try!(invoke!(&cp_env_body, &e1)))
+                ),
+                extenv,
+                tyenv
+            ));
             invoke!(&cp_env, e2)
-        },
+        }
         Syntax::App(e, es) => {
             let t = id_gen.gen_type();
-            let funtype = Type::Fun(g_seq!(es), // List.map (g env) es
-                                    Box::new(t.clone()));
+            let funtype = Type::Fun(
+                g_seq!(es), // List.map (g env) es
+                Box::new(t.clone()),
+            );
             typed!(e, funtype);
             Ok(t)
-        },
+        }
         Syntax::Tuple(es) => Ok(Type::Tuple(g_seq!(es))),
         Syntax::LetTuple(xts, e1, e2) => {
-            typed!(e1, Type::Tuple(xts.iter()
-                                   .map(|xt| xt.1.clone())
-                                   .collect::<Vec<_>>()
-                                   .into_boxed_slice())); // List.map snd xts
+            typed!(
+                e1,
+                Type::Tuple(
+                    xts.iter()
+                        .map(|xt| xt.1.clone())
+                        .collect::<Vec<_>>()
+                        .into_boxed_slice()
+                )
+            ); // List.map snd xts
             let mut cp_env = env.clone();
             for (x, t) in xts.iter() {
                 cp_env.insert(x.to_string(), t.clone());
             }
             invoke!(&cp_env, e2)
-        },
+        }
         Syntax::Array(e1, e2) => {
             typed!(e1, Type::Int);
             let t = try!(invoke!(env, e2));
@@ -306,7 +354,7 @@ fn g(env: &HashMap<String, Type>, e: &Syntax,
             typed!(e1, Type::Array(Box::new(t.clone())));
             typed!(e2, Type::Int);
             Ok(Type::Unit)
-        },
+        }
     }
 }
 
@@ -318,34 +366,38 @@ fn g(env: &HashMap<String, Type>, e: &Syntax,
  * If this function fails, an error message wrapped with Err is returned.
  * The content of extenv is unspecified.
  */
-pub fn f(e: &Syntax, id_gen: &mut IdGen, extenv: &mut HashMap<String, Type>)
-         -> Result<Syntax, String> {
+pub fn f(
+    e: &Syntax,
+    id_gen: &mut IdGen,
+    extenv: &mut HashMap<String, Type>,
+) -> Result<Syntax, String> {
     let mut tyenv = HashMap::new();
-    let typed = g(&HashMap::new(), e, extenv, &mut tyenv, id_gen)
-        .unwrap();
+    let typed = g(&HashMap::new(), e, extenv, &mut tyenv, id_gen).unwrap();
     println!("{:?}", typed);
     match unify(&Type::Unit, &typed, extenv, &mut tyenv) {
-        Err(TypingError::Unify(_, _)) =>
-            return Err("top level does not have type unit".to_string()),
-        Ok(()) => {},
+        Err(TypingError::Unify(_, _)) => {
+            return Err("top level does not have type unit".to_string())
+        }
+        Ok(()) => {}
     }
-    *extenv = extenv.iter().map(|(k, x)| (k.clone(), deref_typ(&x, &tyenv))).collect();
+    *extenv = extenv
+        .iter()
+        .map(|(k, x)| (k.clone(), deref_typ(&x, &tyenv)))
+        .collect();
     Ok(deref_term(e, &tyenv))
 }
 
 #[cfg(test)]
-mod tests{
-    use typing::*;
-    use syntax::*;
+mod tests {
     use std::collections::HashMap;
+    use syntax::*;
+    use typing::*;
     #[test]
     fn test_typing_add() {
         use self::Syntax::*;
         let mut id_gen = IdGen::new();
         let mut extenv = HashMap::new();
-        let syn = IntBin(self::IntBin::Add,
-                         Box::new(Int(14)),
-                         Box::new(Int(23)));
+        let syn = IntBin(self::IntBin::Add, Box::new(Int(14)), Box::new(Int(23)));
         assert!(f(&syn, &mut id_gen, &mut extenv).is_err()); // top is not :unit.
     }
     #[test]
@@ -353,8 +405,7 @@ mod tests{
         use self::Syntax::*;
         let mut id_gen = IdGen::new();
         let mut extenv = HashMap::new();
-        let syn = App(Box::new(Var("print_int".to_string())),
-                      Box::new([Int(23)]));
+        let syn = App(Box::new(Var("print_int".to_string())), Box::new([Int(23)]));
         assert!(f(&syn, &mut id_gen, &mut extenv).is_ok()); // top can be :unit.
     }
     #[test]
@@ -363,11 +414,17 @@ mod tests{
         let mut id_gen = IdGen::new();
         let mut extenv = HashMap::new();
         // let rec f x = f x in f 0
-        let fundef = LetRec(Fundef {
-            name: ("f".to_string(), Type::Var(100)),
-            args: Box::new([("x".to_string(), Type::Var(101))]),
-            body: Box::new(App(Box::new(Var("f".to_string())), Box::new([Var("x".to_string())])))
-        }, Box::new(App(Box::new(Var("f".to_string())), Box::new([Int(0)]))));
+        let fundef = LetRec(
+            Fundef {
+                name: ("f".to_string(), Type::Var(100)),
+                args: Box::new([("x".to_string(), Type::Var(101))]),
+                body: Box::new(App(
+                    Box::new(Var("f".to_string())),
+                    Box::new([Var("x".to_string())]),
+                )),
+            },
+            Box::new(App(Box::new(Var("f".to_string())), Box::new([Int(0)]))),
+        );
         assert!(f(&fundef, &mut id_gen, &mut extenv).is_ok());
     }
     #[test]
@@ -375,16 +432,18 @@ mod tests{
         use self::Syntax::*;
         let mut id_gen = IdGen::new();
         let mut extenv = HashMap::new();
-        let tuple = Tuple(Box::new([Int(4), Int(5)]
-                          )); // (4, 5)
-        // let (x: int, y: 'a100) = (...) in x
-        // 100 is used to avoid collision with generated types
-        let let_ex = LetTuple(Box::new([("x".to_string(), Type::Int),
-                                        ("y".to_string(), Type::Var(100))]),
-                              Box::new(tuple),
-                              Box::new(Var("x".to_string())));
-        let printer = App(Box::new(Var("print_int".to_string())),
-                      Box::new([let_ex])); // print_int (...)
+        let tuple = Tuple(Box::new([Int(4), Int(5)])); // (4, 5)
+                                                       // let (x: int, y: 'a100) = (...) in x
+                                                       // 100 is used to avoid collision with generated types
+        let let_ex = LetTuple(
+            Box::new([
+                ("x".to_string(), Type::Int),
+                ("y".to_string(), Type::Var(100)),
+            ]),
+            Box::new(tuple),
+            Box::new(Var("x".to_string())),
+        );
+        let printer = App(Box::new(Var("print_int".to_string())), Box::new([let_ex])); // print_int (...)
         assert!(f(&printer, &mut id_gen, &mut extenv).is_ok());
     }
     #[test]
@@ -394,8 +453,7 @@ mod tests{
         let mut extenv = HashMap::new();
         let ary = Array(Box::new(Int(4)), Box::new(Int(5))); // newarray 4 5
         let access = Get(Box::new(ary), Box::new(Int(2))); // (...).(2)
-        let printer = App(Box::new(Var("print_int".to_string())),
-                      Box::new([access]));
+        let printer = App(Box::new(Var("print_int".to_string())), Box::new([access]));
         assert!(f(&printer, &mut id_gen, &mut extenv).is_ok());
     }
     #[test]

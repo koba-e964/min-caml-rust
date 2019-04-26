@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use syntax::IntBin;
 use x86::asm;
-use x86::asm::{Asm, CompBin, Exp, IdOrImm, Fundef, Prog};
+use x86::asm::{Asm, CompBin, Exp, Fundef, IdOrImm, Prog};
 
 // Name -> Const
 type ConstEnv = HashMap<String, i32>;
@@ -18,37 +18,42 @@ fn g(env: &mut ConstEnv, e: Asm) -> Asm {
             } else {
                 e
             }
-        },
-        Asm::Let(x, t, exp, e) =>
-            Asm::Let(x, t, g_p(env, exp), Box::new(g(env, *e))),
+        }
+        Asm::Let(x, t, exp, e) => Asm::Let(x, t, g_p(env, exp), Box::new(g(env, *e))),
     }
 }
 
 fn g_p(env: &mut ConstEnv, e: Exp) -> Exp {
     macro_rules! invoke {
-        ($e: expr) => (Box::new(g(env, *$e)));
+        ($e: expr) => {
+            Box::new(g(env, *$e))
+        };
     }
     match e {
-        Exp::Mov(ref x) if env.contains_key(x) =>
-            Exp::Set(env[x]),
-        Exp::IntOp(op, ref x, IdOrImm::V(ref y)) if env.contains_key(y) =>
-            Exp::IntOp(op, x.clone(), IdOrImm::C(env[y])),
+        Exp::Mov(ref x) if env.contains_key(x) => Exp::Set(env[x]),
+        Exp::IntOp(op, ref x, IdOrImm::V(ref y)) if env.contains_key(y) => {
+            Exp::IntOp(op, x.clone(), IdOrImm::C(env[y]))
+        }
         // x + y = y + x
-        Exp::IntOp(IntBin::Add, ref x, IdOrImm::V(ref y)) if env.contains_key(x) =>
-            Exp::IntOp(IntBin::Add, y.clone(), IdOrImm::C(env[x])),
-        Exp::Ld(ref x, IdOrImm::V(ref y), imm) if env.contains_key(y) =>
-            Exp::Ld(x.clone(), IdOrImm::C(env[y]), imm),
-        Exp::St(ref x, ref y, IdOrImm::V(ref z), imm) if env.contains_key(z) =>
-            Exp::St(x.clone(), y.clone(), IdOrImm::C(env[z]), imm),
-        Exp::LdDF(ref x, IdOrImm::V(ref y), i) if env.contains_key(y) =>
-            Exp::LdDF(x.clone(), IdOrImm::C(env[y]), i),
-        Exp::StDF(ref x, ref y, IdOrImm::V(ref z), i) if env.contains_key(z) =>
-            Exp::StDF(x.clone(), y.clone(), IdOrImm::C(env[z]), i),
+        Exp::IntOp(IntBin::Add, ref x, IdOrImm::V(ref y)) if env.contains_key(x) => {
+            Exp::IntOp(IntBin::Add, y.clone(), IdOrImm::C(env[x]))
+        }
+        Exp::Ld(ref x, IdOrImm::V(ref y), imm) if env.contains_key(y) => {
+            Exp::Ld(x.clone(), IdOrImm::C(env[y]), imm)
+        }
+        Exp::St(ref x, ref y, IdOrImm::V(ref z), imm) if env.contains_key(z) => {
+            Exp::St(x.clone(), y.clone(), IdOrImm::C(env[z]), imm)
+        }
+        Exp::LdDF(ref x, IdOrImm::V(ref y), i) if env.contains_key(y) => {
+            Exp::LdDF(x.clone(), IdOrImm::C(env[y]), i)
+        }
+        Exp::StDF(ref x, ref y, IdOrImm::V(ref z), i) if env.contains_key(z) => {
+            Exp::StDF(x.clone(), y.clone(), IdOrImm::C(env[z]), i)
+        }
         Exp::IfComp(op, x, y_p, e1, e2) => {
             if let IdOrImm::V(ref y) = y_p {
                 if let Some(&env_y) = env.get(y) {
-                    return Exp::IfComp(op, x, IdOrImm::C(env_y),
-                                       invoke!(e1), invoke!(e2));
+                    return Exp::IfComp(op, x, IdOrImm::C(env_y), invoke!(e1), invoke!(e2));
                 }
                 if let Some(&env_x) = env.get(&x) {
                     let opposite = match op {
@@ -56,14 +61,18 @@ fn g_p(env: &mut ConstEnv, e: Exp) -> Exp {
                         CompBin::LE => CompBin::GE,
                         CompBin::GE => CompBin::LE,
                     };
-                    return Exp::IfComp(opposite, y.clone(), IdOrImm::C(env_x),
-                                       invoke!(e1), invoke!(e2));
+                    return Exp::IfComp(
+                        opposite,
+                        y.clone(),
+                        IdOrImm::C(env_x),
+                        invoke!(e1),
+                        invoke!(e2),
+                    );
                 }
             }
             Exp::IfComp(op, x, y_p, invoke!(e1), invoke!(e2))
-        },
-        Exp::IfFComp(op, x, y_p, e1, e2) =>
-            Exp::IfFComp(op, x, y_p, invoke!(e1), invoke!(e2)),
+        }
+        Exp::IfFComp(op, x, y_p, e1, e2) => Exp::IfFComp(op, x, y_p, invoke!(e1), invoke!(e2)),
         _ => e,
     }
 }
@@ -76,20 +85,27 @@ fn h(mut fundef: Fundef) -> Fundef {
 }
 
 pub fn f(Prog(data, fundefs, e): Prog) -> Prog {
-    Prog(data, fundefs.into_vec().into_iter().map(h).collect::<Vec<_>>().into_boxed_slice(),
-         {
-             let mut env = HashMap::new();
-             let ans = g(&mut env, e);
-             eprintln!("env = {:?}", env);
-             ans
-         })
+    Prog(
+        data,
+        fundefs
+            .into_vec()
+            .into_iter()
+            .map(h)
+            .collect::<Vec<_>>()
+            .into_boxed_slice(),
+        {
+            let mut env = HashMap::new();
+            let ans = g(&mut env, e);
+            eprintln!("env = {:?}", env);
+            ans
+        },
+    )
 }
-
 
 #[cfg(test)]
 mod tests {
-    use syntax::{Type, IntBin};
-    use x86::asm::{Prog, Asm, Exp, IdOrImm, CompBin, FCompBin};
+    use syntax::{IntBin, Type};
+    use x86::asm::{Asm, CompBin, Exp, FCompBin, IdOrImm, Prog};
     use x86::simm;
     // Checks if g(a) == b. Since g is not public, a and b are wrapped in Prog.
     fn assert_g_works(a: Asm, b: Asm) {
@@ -100,8 +116,12 @@ mod tests {
     #[test]
     fn imm_in_mov_is_inlined() {
         let x = || "x".to_string();
-        let e1 = Asm::Let(x(), Type::Int,
-                          Exp::Set(5), Box::new(Asm::Ans(Exp::Mov(x()))));
+        let e1 = Asm::Let(
+            x(),
+            Type::Int,
+            Exp::Set(5),
+            Box::new(Asm::Ans(Exp::Mov(x()))),
+        );
         let e2 = Asm::Ans(Exp::Set(5));
         assert_g_works(e1, e2);
     }
@@ -110,8 +130,7 @@ mod tests {
         let x = || "x".to_string();
         let y = || "y".to_string();
         let e1 = Asm::Ans(Exp::IntOp(IntBin::Add, x(), IdOrImm::V(y())));
-        let e1 = Asm::Let(y(), Type::Int,
-                          Exp::Set(5), Box::new(e1));
+        let e1 = Asm::Let(y(), Type::Int, Exp::Set(5), Box::new(e1));
         let e2 = Asm::Ans(Exp::IntOp(IntBin::Add, x(), IdOrImm::C(5)));
         assert_g_works(e1, e2);
     }
@@ -120,8 +139,7 @@ mod tests {
         let x = || "x".to_string();
         let y = || "y".to_string();
         let e1 = Asm::Ans(Exp::IntOp(IntBin::Add, x(), IdOrImm::V(y())));
-        let e1 = Asm::Let(x(), Type::Int,
-                          Exp::Set(7), Box::new(e1));
+        let e1 = Asm::Let(x(), Type::Int, Exp::Set(7), Box::new(e1));
         let e2 = Asm::Ans(Exp::IntOp(IntBin::Add, y(), IdOrImm::C(7)));
         assert_g_works(e1, e2);
     }
@@ -131,10 +149,21 @@ mod tests {
         let y = || "y".to_string();
         let z = Asm::Ans(Exp::Mov("z".to_string()));
         let w = Asm::Ans(Exp::Mov("w".to_string()));
-        let e1 = Asm::Ans(Exp::IfComp(CompBin::Eq, x(), IdOrImm::V(y()), Box::new(z.clone()), Box::new(w.clone())));
-        let e1 = Asm::Let(y(), Type::Int,
-                          Exp::Set(5), Box::new(e1));
-        let e2 = Asm::Ans(Exp::IfComp(CompBin::Eq, x(), IdOrImm::C(5), Box::new(z), Box::new(w)));
+        let e1 = Asm::Ans(Exp::IfComp(
+            CompBin::Eq,
+            x(),
+            IdOrImm::V(y()),
+            Box::new(z.clone()),
+            Box::new(w.clone()),
+        ));
+        let e1 = Asm::Let(y(), Type::Int, Exp::Set(5), Box::new(e1));
+        let e2 = Asm::Ans(Exp::IfComp(
+            CompBin::Eq,
+            x(),
+            IdOrImm::C(5),
+            Box::new(z),
+            Box::new(w),
+        ));
         assert_g_works(e1, e2);
     }
     #[test]
@@ -143,10 +172,21 @@ mod tests {
         let y = || "y".to_string();
         let z = Asm::Ans(Exp::Mov("z".to_string()));
         let w = Asm::Ans(Exp::Mov("w".to_string()));
-        let e1 = Asm::Ans(Exp::IfComp(CompBin::GE, x(), IdOrImm::V(y()), Box::new(z.clone()), Box::new(w.clone())));
-        let e1 = Asm::Let(x(), Type::Int,
-                          Exp::Set(7), Box::new(e1));
-        let e2 = Asm::Ans(Exp::IfComp(CompBin::LE, y(), IdOrImm::C(7), Box::new(z), Box::new(w)));
+        let e1 = Asm::Ans(Exp::IfComp(
+            CompBin::GE,
+            x(),
+            IdOrImm::V(y()),
+            Box::new(z.clone()),
+            Box::new(w.clone()),
+        ));
+        let e1 = Asm::Let(x(), Type::Int, Exp::Set(7), Box::new(e1));
+        let e2 = Asm::Ans(Exp::IfComp(
+            CompBin::LE,
+            y(),
+            IdOrImm::C(7),
+            Box::new(z),
+            Box::new(w),
+        ));
         assert_g_works(e1, e2);
     }
     #[test]
@@ -155,11 +195,27 @@ mod tests {
         let y = || "y".to_string();
         let z = || "z".to_string();
         let w = Asm::Ans(Exp::Mov("w".to_string()));
-        let e1 = Asm::Let(x(), Type::Int,
-                          Exp::Set(5), Box::new(Asm::Ans(Exp::Mov(x()))));
-        let e1 = Asm::Ans(Exp::IfComp(CompBin::Eq, y(), IdOrImm::V(z()), Box::new(e1), Box::new(w.clone())));
+        let e1 = Asm::Let(
+            x(),
+            Type::Int,
+            Exp::Set(5),
+            Box::new(Asm::Ans(Exp::Mov(x()))),
+        );
+        let e1 = Asm::Ans(Exp::IfComp(
+            CompBin::Eq,
+            y(),
+            IdOrImm::V(z()),
+            Box::new(e1),
+            Box::new(w.clone()),
+        ));
         let e2 = Asm::Ans(Exp::Set(5));
-        let e2 = Asm::Ans(Exp::IfComp(CompBin::Eq, y(), IdOrImm::V(z()), Box::new(e2), Box::new(w.clone())));
+        let e2 = Asm::Ans(Exp::IfComp(
+            CompBin::Eq,
+            y(),
+            IdOrImm::V(z()),
+            Box::new(e2),
+            Box::new(w.clone()),
+        ));
         assert_g_works(e1, e2);
     }
     #[test]
@@ -168,11 +224,27 @@ mod tests {
         let y = || "y".to_string();
         let z = || "z".to_string();
         let w = Asm::Ans(Exp::Mov("w".to_string()));
-        let e1 = Asm::Let(x(), Type::Int,
-                          Exp::Set(5), Box::new(Asm::Ans(Exp::Mov(x()))));
-        let e1 = Asm::Ans(Exp::IfFComp(FCompBin::Eq, y(), z(), Box::new(e1), Box::new(w.clone())));
+        let e1 = Asm::Let(
+            x(),
+            Type::Int,
+            Exp::Set(5),
+            Box::new(Asm::Ans(Exp::Mov(x()))),
+        );
+        let e1 = Asm::Ans(Exp::IfFComp(
+            FCompBin::Eq,
+            y(),
+            z(),
+            Box::new(e1),
+            Box::new(w.clone()),
+        ));
         let e2 = Asm::Ans(Exp::Set(5));
-        let e2 = Asm::Ans(Exp::IfFComp(FCompBin::Eq, y(), z(), Box::new(e2), Box::new(w.clone())));
+        let e2 = Asm::Ans(Exp::IfFComp(
+            FCompBin::Eq,
+            y(),
+            z(),
+            Box::new(e2),
+            Box::new(w.clone()),
+        ));
         assert_g_works(e1, e2);
     }
 }

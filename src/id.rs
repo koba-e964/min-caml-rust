@@ -32,7 +32,8 @@ impl IdGen {
             Type::Tuple(_) => "t",
             Type::Array(_) => "a",
             Type::Var(_) => panic!("Var is not appropriate"),
-        }.to_string()
+        }
+        .to_string()
     }
     pub fn gen_tmp(&mut self, t: &Type) -> String {
         let a = self.gen();

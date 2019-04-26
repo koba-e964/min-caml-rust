@@ -1,10 +1,9 @@
 extern crate std;
-use nom::{IResult, digit};
-use nom::types::CompleteByteSlice;
-use syntax::*;
 use id::IdGen;
+use nom::types::CompleteByteSlice;
+use nom::{digit, IResult};
 use ordered_float::OrderedFloat;
-
+use syntax::*;
 
 pub fn parse(x: &[u8]) -> IResult<CompleteByteSlice, Syntax> {
     exp(CompleteByteSlice(x))
@@ -214,22 +213,22 @@ macro_rules! exp_binary_operator {
         );
     }
 }
-exp_binary_operator!(
-    exp_comparative, exp_additive,
-    comp_op,
-    |acc, ((op, negated, flipped), arg)| {
-        let ast = if flipped {
-            Syntax::CompBin(op, Box::new(arg), Box::new(acc))
-        } else {
-            Syntax::CompBin(op, Box::new(acc), Box::new(arg))
-        };
-        if negated {
-            Syntax::Not(Box::new(ast))
-        } else {
-            ast
-        }
+exp_binary_operator!(exp_comparative, exp_additive, comp_op, |acc,
+                                                              (
+    (op, negated, flipped),
+    arg,
+)| {
+    let ast = if flipped {
+        Syntax::CompBin(op, Box::new(arg), Box::new(acc))
+    } else {
+        Syntax::CompBin(op, Box::new(acc), Box::new(arg))
+    };
+    if negated {
+        Syntax::Not(Box::new(ast))
+    } else {
+        ast
     }
-);
+});
 // (operator, negated, arguments flipped)
 named!(comp_op<CompleteByteSlice, (CompBin, bool, bool)>, alt!(
     do_parse!(tag!("<=") >> ((CompBin::LE, false, false))) |
@@ -240,7 +239,8 @@ named!(comp_op<CompleteByteSlice, (CompBin, bool, bool)>, alt!(
     do_parse!(char!('>') >> ((CompBin::LE, true, false)))
 ));
 exp_binary_operator!(
-    exp_additive, exp_multiplicative,
+    exp_additive,
+    exp_multiplicative,
     add_op,
     |acc, (op, arg)| match op {
         Err(op) => Syntax::FloatBin(op, Box::new(acc), Box::new(arg)),
@@ -255,7 +255,8 @@ named!(add_op<CompleteByteSlice, Result<IntBin, FloatBin>>, alt!(
 ));
 
 exp_binary_operator!(
-    exp_multiplicative, exp_unary_minus,
+    exp_multiplicative,
+    exp_unary_minus,
     mult_op,
     |acc, (op, arg)| match op {
         Err(op) => Syntax::FloatBin(op, Box::new(acc), Box::new(arg)),
@@ -283,7 +284,6 @@ named!(exp_unary_minus<CompleteByteSlice, Syntax>, alt!(
     )) |
     call!(exp_app)
 ));
-
 
 named!(exp_app<CompleteByteSlice, Syntax>, alt!(
     ws!(do_parse!(char!('!') >> res: exp_app >> (Syntax::Not(Box::new(res))))) |
@@ -335,7 +335,6 @@ named!(float_lit<CompleteByteSlice, f64>, alt!(
             (convert_to_f64(&fstr))
     )
 ));
-                          
 
 named!(ident<CompleteByteSlice, String>, ws!(do_parse!(
     s: verify!(take_till!(is_not_ident_u8), is_ident) >>
@@ -343,10 +342,7 @@ named!(ident<CompleteByteSlice, String>, ws!(do_parse!(
 )));
 
 fn is_not_ident_u8(x: u8) -> bool {
-    !((b'0' <= x && x <= b'9') ||
-      (b'A' <= x && x <= b'Z') ||
-      (b'a' <= x && x <= b'z') ||
-      x == b'_')
+    !((b'0' <= x && x <= b'9') || (b'A' <= x && x <= b'Z') || (b'a' <= x && x <= b'z') || x == b'_')
 }
 
 fn is_ident(x: CompleteByteSlice) -> bool {
@@ -354,15 +350,23 @@ fn is_ident(x: CompleteByteSlice) -> bool {
 }
 
 fn is_ident_u8_slice(x: &[u8]) -> bool {
-    let keywords = vec![&b"let"[..], &b"rec"[..], &b"in"[..], &b"true"[..],
-                        &b"false"[..], &b"if"[..], &b"then"[..], &b"else"[..],
-                        &b"Array.create"[..], &b"Array.make"[..]];
+    let keywords = vec![
+        &b"let"[..],
+        &b"rec"[..],
+        &b"in"[..],
+        &b"true"[..],
+        &b"false"[..],
+        &b"if"[..],
+        &b"then"[..],
+        &b"else"[..],
+        &b"Array.create"[..],
+        &b"Array.make"[..],
+    ];
     if x.is_empty() || keywords.contains(&x) {
         return false;
     }
     !(b'0' <= x[0] && x[0] <= b'9')
 }
-
 
 fn convert(x: &[u8], radix: i64) -> i64 {
     let mut cur = 0;
@@ -406,9 +410,15 @@ pub fn uniquify(expr: Syntax, id_gen: &mut IdGen) -> Syntax {
             let e1 = uniquify(*e1, id_gen);
             let e2 = uniquify(*e2, id_gen);
             Syntax::Let((x, t), Box::new(e1), Box::new(e2))
-        },
-        Syntax::LetRec(Fundef {name: (name, t), mut args, body: e1},
-                       e2) => {
+        }
+        Syntax::LetRec(
+            Fundef {
+                name: (name, t),
+                mut args,
+                body: e1,
+            },
+            e2,
+        ) => {
             let t = if let Type::Var(_) = t {
                 id_gen.gen_type()
             } else {
@@ -425,10 +435,15 @@ pub fn uniquify(expr: Syntax, id_gen: &mut IdGen) -> Syntax {
             }
             let e1 = Box::new(uniquify(*e1, id_gen));
             let e2 = Box::new(uniquify(*e2, id_gen));
-            Syntax::LetRec(Fundef {name: (name, t), args,
-                                   body: e1},
-                           e2)
-        },
+            Syntax::LetRec(
+                Fundef {
+                    name: (name, t),
+                    args,
+                    body: e1,
+                },
+                e2,
+            )
+        }
         Syntax::LetTuple(mut pat, e1, e2) => {
             for elem in pat.iter_mut() {
                 if let Type::Var(_) = elem.1 {
@@ -442,61 +457,61 @@ pub fn uniquify(expr: Syntax, id_gen: &mut IdGen) -> Syntax {
         Syntax::Not(e1) => {
             let e1 = Box::new(uniquify(*e1, id_gen));
             Syntax::Not(e1)
-        },
+        }
         Syntax::Neg(e1) => {
             let e1 = Box::new(uniquify(*e1, id_gen));
             Syntax::Neg(e1)
-        },
+        }
         Syntax::IntBin(op, e1, e2) => {
             let e1 = Box::new(uniquify(*e1, id_gen));
             let e2 = Box::new(uniquify(*e2, id_gen));
             Syntax::IntBin(op, e1, e2)
-        },
+        }
         Syntax::FNeg(e1) => {
             let e1 = Box::new(uniquify(*e1, id_gen));
             Syntax::FNeg(e1)
-        },
+        }
         Syntax::FloatBin(op, e1, e2) => {
             let e1 = Box::new(uniquify(*e1, id_gen));
             let e2 = Box::new(uniquify(*e2, id_gen));
             Syntax::FloatBin(op, e1, e2)
-        },
+        }
         Syntax::CompBin(op, e1, e2) => {
             let e1 = Box::new(uniquify(*e1, id_gen));
             let e2 = Box::new(uniquify(*e2, id_gen));
             Syntax::CompBin(op, e1, e2)
-        },
+        }
         Syntax::If(e1, e2, e3) => {
             let e1 = Box::new(uniquify(*e1, id_gen));
             let e2 = Box::new(uniquify(*e2, id_gen));
             let e3 = Box::new(uniquify(*e3, id_gen));
             Syntax::If(e1, e2, e3)
-        },
+        }
         Syntax::App(e1, mut e2s) => {
             let e1 = Box::new(uniquify(*e1, id_gen));
             uniquify_slice(&mut e2s, id_gen);
             Syntax::App(e1, e2s)
-        },
+        }
         Syntax::Tuple(mut es) => {
             uniquify_slice(&mut es, id_gen);
             Syntax::Tuple(es)
-        },
+        }
         Syntax::Array(e1, e2) => {
             let e1 = Box::new(uniquify(*e1, id_gen));
             let e2 = Box::new(uniquify(*e2, id_gen));
             Syntax::Array(e1, e2)
-        },
+        }
         Syntax::Get(e1, e2) => {
             let e1 = Box::new(uniquify(*e1, id_gen));
             let e2 = Box::new(uniquify(*e2, id_gen));
             Syntax::Get(e1, e2)
-        },
+        }
         Syntax::Put(e1, e2, e3) => {
             let e1 = Box::new(uniquify(*e1, id_gen));
             let e2 = Box::new(uniquify(*e2, id_gen));
             let e3 = Box::new(uniquify(*e3, id_gen));
             Syntax::Put(e1, e2, e3)
-        },
+        }
         x => x, // No Syntax inside
     }
 }
@@ -507,7 +522,6 @@ fn uniquify_slice(es: &mut [Syntax], id_gen: &mut IdGen) {
         *elem = uniquify(entry, id_gen);
     }
 }
-
 
 pub fn remove_comments(a: &[u8]) -> Result<Vec<u8>, String> {
     let mut ret = Vec::new();
@@ -539,7 +553,6 @@ pub fn remove_comments(a: &[u8]) -> Result<Vec<u8>, String> {
         Err("Comments are not balanced".to_string())
     }
 }
-
 
 /*
 simple_exp: /* (* 括弧をつけなくても関数の引数になれる式 (caml2html: parser_simple) *) */
@@ -621,9 +634,9 @@ exp: /* (* 一般の式 (caml2html: parser_exp) *) */
     { Array($2, $3) }
 | error
     { failwith
-	(Printf.sprintf "parse error near characters %d-%d"
-	   (Parsing.symbol_start ())
-	   (Parsing.symbol_end ())) }
+    (Printf.sprintf "parse error near characters %d-%d"
+       (Parsing.symbol_start ())
+       (Parsing.symbol_end ())) }
 
 fundef:
 | IDENT formal_args EQUAL exp
@@ -656,7 +669,6 @@ pat:
     { [addtyp $1; addtyp $3] }
 */
 
-
 /*
 Operator precedence:
 
@@ -675,30 +687,48 @@ Operator precedence:
 
 #[cfg(test)]
 mod tests {
-    use parser::parse;
     use ordered_float::OrderedFloat;
+    use parser::parse;
     #[test]
     fn test_simple_exp() {
         use syntax::Syntax::*;
-        assert_eq!(parse(b" ( c)"), Ok(((&[][..]).into(),
-                                      Var("c".to_string()))));
+        assert_eq!(
+            parse(b" ( c)"),
+            Ok(((&[][..]).into(), Var("c".to_string())))
+        );
         assert_eq!(parse(b"() "), Ok(((&[][..]).into(), Unit)));
         assert_eq!(parse(b"100"), Ok(((&[][..]).into(), Int(100))));
-        assert_eq!(parse(b"10.0"), Ok((
-            (&[][..]).into(), Float(OrderedFloat::from(10.0)))));
-        assert_eq!(parse(b"1256.25"),
-                   Ok(((&[][..]).into(),
-                       Float(OrderedFloat::from(1256.25)))));
-        assert_eq!(parse(b"a.(b)"),
-                   Ok(((&[][..]).into(),
-                       Get(Box::new(Var("a".to_string())),
-                           Box::new(Var("b".to_string()))))));
-        assert_eq!(parse(b"a.(b).(c)"),
-                   Ok(((&[][..]).into(),
-                       Get(Box::new(
-                           Get(Box::new(Var("a".to_string())),
-                               Box::new(Var("b".to_string())))),
-                           Box::new(Var("c".to_string()))))));
+        assert_eq!(
+            parse(b"10.0"),
+            Ok(((&[][..]).into(), Float(OrderedFloat::from(10.0))))
+        );
+        assert_eq!(
+            parse(b"1256.25"),
+            Ok(((&[][..]).into(), Float(OrderedFloat::from(1256.25))))
+        );
+        assert_eq!(
+            parse(b"a.(b)"),
+            Ok((
+                (&[][..]).into(),
+                Get(
+                    Box::new(Var("a".to_string())),
+                    Box::new(Var("b".to_string()))
+                )
+            ))
+        );
+        assert_eq!(
+            parse(b"a.(b).(c)"),
+            Ok((
+                (&[][..]).into(),
+                Get(
+                    Box::new(Get(
+                        Box::new(Var("a".to_string())),
+                        Box::new(Var("b".to_string()))
+                    )),
+                    Box::new(Var("c".to_string()))
+                )
+            ))
+        );
     }
 
     #[test]
@@ -723,11 +753,17 @@ mod tests {
         let result = parse(b"let rec f x = x in f 1").unwrap();
         assert_eq!(result.0, (&[][..]).into());
         match result.1 {
-            LetRec(Fundef { name: (id, _), args: _, body: e1 }, e2) => {
+            LetRec(
+                Fundef {
+                    name: (id, _),
+                    args: _,
+                    body: e1,
+                },
+                e2,
+            ) => {
                 assert_eq!(id, "f");
                 assert_eq!(*e1, Var("x".to_string()));
-                assert_eq!(*e2, App(Box::new(Var("f".to_string())),
-                                    Box::new([Int(1)])));
+                assert_eq!(*e2, App(Box::new(Var("f".to_string())), Box::new([Int(1)])));
             }
             _ => panic!(),
         }
@@ -735,14 +771,18 @@ mod tests {
 
     #[test]
     fn test_lettuple() {
-        use syntax::Syntax::{Int, App, LetTuple, Var};
+        use syntax::Syntax::{App, Int, LetTuple, Var};
         let result = parse(b"let (x, y) = make_pair 1 2 in x").unwrap();
         assert_eq!(result.0, (&[][..]).into());
         match result.1 {
             LetTuple(_pat, e1, e2) => {
-                assert_eq!(*e1,
-                           App(Box::new(Var("make_pair".to_string())),
-                               Box::new([Int(1), Int(2)])));
+                assert_eq!(
+                    *e1,
+                    App(
+                        Box::new(Var("make_pair".to_string())),
+                        Box::new([Int(1), Int(2)])
+                    )
+                );
                 assert_eq!(*e2, Var("x".to_string()));
             }
             _ => panic!(),
@@ -757,211 +797,266 @@ mod tests {
         let print_int = || Box::new(Var("print_int".to_string()));
         let dummy = || ("_dummy".to_string(), Type::Unit);
         // semicolon is right-associative
-        assert_eq!(result,
-                   Ok(((&[][..]).into(),
-                       Let(dummy(),
-                           Box::new(App(print_int(),
-                                        Box::new([Int(0)]))),
-                           Box::new(Let(
-                               dummy(),
-                               Box::new(Unit),
-                               Box::new(App(
-                                   print_int(),
-                                   Box::new([Int(1)])))))))));
+        assert_eq!(
+            result,
+            Ok((
+                (&[][..]).into(),
+                Let(
+                    dummy(),
+                    Box::new(App(print_int(), Box::new([Int(0)]))),
+                    Box::new(Let(
+                        dummy(),
+                        Box::new(Unit),
+                        Box::new(App(print_int(), Box::new([Int(1)])))
+                    ))
+                )
+            ))
+        );
     }
 
     #[test]
     fn test_if() {
-        use syntax::Syntax::{App, Int, If, Var};
-        assert_eq!(parse(b"if f 3 then 4 else 0"),
-                   Ok(((&[][..]).into(),
-                       If(
-                           Box::new(App(Box::new(Var("f".to_string())),
-                                        Box::new([Int(3)]))),
-                           Box::new(Int(4)),
-                           Box::new(Int(0))))));
+        use syntax::Syntax::{App, If, Int, Var};
+        assert_eq!(
+            parse(b"if f 3 then 4 else 0"),
+            Ok((
+                (&[][..]).into(),
+                If(
+                    Box::new(App(Box::new(Var("f".to_string())), Box::new([Int(3)]))),
+                    Box::new(Int(4)),
+                    Box::new(Int(0))
+                )
+            ))
+        );
     }
 
     #[test]
     fn test_if2() {
-        use syntax::Syntax::{App, Int, If, Var};
-        assert_eq!(parse(b" if f 3 then 4 else 0 "),
-                   Ok(((&[][..]).into(),
-                       If(
-                           Box::new(App(Box::new(Var("f".to_string())),
-                                        Box::new([Int(3)]))),
-                           Box::new(Int(4)),
-                           Box::new(Int(0))))));
+        use syntax::Syntax::{App, If, Int, Var};
+        assert_eq!(
+            parse(b" if f 3 then 4 else 0 "),
+            Ok((
+                (&[][..]).into(),
+                If(
+                    Box::new(App(Box::new(Var("f".to_string())), Box::new([Int(3)]))),
+                    Box::new(Int(4)),
+                    Box::new(Int(0))
+                )
+            ))
+        );
     }
 
     #[test]
     fn test_comma() {
         use syntax::Syntax::{Int, Tuple, Var};
-        use syntax::{Syntax, IntBin};
+        use syntax::{IntBin, Syntax};
         let x = || Var("x".to_string());
         let y = || Var("y".to_string());
         let z = || Var("z".to_string());
         let w = || Var("w".to_string());
-        assert_eq!(parse(b"x, y, (z, w)"),
-                   Ok(((&[][..]).into(),
-                       Tuple(
-                           Box::new([x(), y(),
-                                     Tuple(
-                                         Box::new([z(), w()]))
-                           ])))));
-        assert_eq!(parse(b"x, 1 + 3"),
-                   Ok(((&[][..]).into(),
-                       Tuple(
-                           Box::new([x(),
-                                     Syntax::IntBin(IntBin::Add,
-                                                    Box::new(Int(1)),
-                                                    Box::new(Int(3)))
-                           ])))));
+        assert_eq!(
+            parse(b"x, y, (z, w)"),
+            Ok((
+                (&[][..]).into(),
+                Tuple(Box::new([x(), y(), Tuple(Box::new([z(), w()]))]))
+            ))
+        );
+        assert_eq!(
+            parse(b"x, 1 + 3"),
+            Ok((
+                (&[][..]).into(),
+                Tuple(Box::new([
+                    x(),
+                    Syntax::IntBin(IntBin::Add, Box::new(Int(1)), Box::new(Int(3)))
+                ]))
+            ))
+        );
     }
 
     #[test]
     fn test_comp() {
-        use syntax::{Syntax, IntBin, CompBin};
         use syntax::Syntax::Int;
-        assert_eq!(parse(b"1 < 2 + 3"),
-                   Ok(((&[][..]).into(),
-                       Syntax::Not(
-                           Box::new(Syntax::CompBin(
-                               CompBin::LE,
-                               Box::new(Syntax::IntBin(
-                                   IntBin::Add,
-                                   Box::new(Int(2)),
-                                   Box::new(Int(3)))),
-                               Box::new(Int(1))))))));
+        use syntax::{CompBin, IntBin, Syntax};
+        assert_eq!(
+            parse(b"1 < 2 + 3"),
+            Ok((
+                (&[][..]).into(),
+                Syntax::Not(Box::new(Syntax::CompBin(
+                    CompBin::LE,
+                    Box::new(Syntax::IntBin(
+                        IntBin::Add,
+                        Box::new(Int(2)),
+                        Box::new(Int(3))
+                    )),
+                    Box::new(Int(1))
+                )))
+            ))
+        );
 
-        assert_eq!(parse(b"4 <= 3"),
-                   Ok(((&[][..]).into(),
-                       Syntax::CompBin(
-                           CompBin::LE,
-                           Box::new(Int(4)),
-                           Box::new(Int(3))))));
-        assert_eq!(parse(b"4 >= 3"),
-                   Ok(((&[][..]).into(),
-                       Syntax::CompBin(
-                           CompBin::LE,
-                           Box::new(Int(3)),
-                           Box::new(Int(4))))));
-        assert_eq!(parse(b"4 > 3"),
-                   Ok(((&[][..]).into(),
-                       Syntax::Not(Box::new(
-                           Syntax::CompBin(
-                               CompBin::LE,
-                               Box::new(Int(4)),
-                               Box::new(Int(3))))))));
-        assert_eq!(parse(b"4 = 3"),
-                   Ok(((&[][..]).into(),
-                       Syntax::CompBin(
-                           CompBin::Eq,
-                           Box::new(Int(4)),
-                           Box::new(Int(3))))));
-        assert_eq!(parse(b"4 <> 3"),
-                   Ok(((&[][..]).into(),
-                       Syntax::Not(Box::new(
-                           Syntax::CompBin(
-                               CompBin::Eq,
-                               Box::new(Int(4)),
-                               Box::new(Int(3))))))));
+        assert_eq!(
+            parse(b"4 <= 3"),
+            Ok((
+                (&[][..]).into(),
+                Syntax::CompBin(CompBin::LE, Box::new(Int(4)), Box::new(Int(3)))
+            ))
+        );
+        assert_eq!(
+            parse(b"4 >= 3"),
+            Ok((
+                (&[][..]).into(),
+                Syntax::CompBin(CompBin::LE, Box::new(Int(3)), Box::new(Int(4)))
+            ))
+        );
+        assert_eq!(
+            parse(b"4 > 3"),
+            Ok((
+                (&[][..]).into(),
+                Syntax::Not(Box::new(Syntax::CompBin(
+                    CompBin::LE,
+                    Box::new(Int(4)),
+                    Box::new(Int(3))
+                )))
+            ))
+        );
+        assert_eq!(
+            parse(b"4 = 3"),
+            Ok((
+                (&[][..]).into(),
+                Syntax::CompBin(CompBin::Eq, Box::new(Int(4)), Box::new(Int(3)))
+            ))
+        );
+        assert_eq!(
+            parse(b"4 <> 3"),
+            Ok((
+                (&[][..]).into(),
+                Syntax::Not(Box::new(Syntax::CompBin(
+                    CompBin::Eq,
+                    Box::new(Int(4)),
+                    Box::new(Int(3))
+                )))
+            ))
+        );
     }
-
 
     #[test]
     fn test_mult() {
+        use syntax::FloatBin;
         use syntax::Syntax;
         use syntax::Syntax::Var;
-        use syntax::FloatBin;
-        assert_eq!(parse(b"x *. y"),
-                   Ok(((&[][..]).into(),
-                       Syntax::FloatBin(
-                           FloatBin::FMul,
-                           Box::new(Var("x".to_string())),
-                           Box::new(Var("y".to_string()))))));
-        assert_eq!(parse(b"x /. y *. z"),
-                   Ok(((&[][..]).into(),
-                       Syntax::FloatBin(
-                           FloatBin::FMul,
-                           Box::new(Syntax::FloatBin(
-                               FloatBin::FDiv,
-                               Box::new(Var("x".to_string())),
-                               Box::new(Var("y".to_string())))),
-                           Box::new(Var("z".to_string()))))));
+        assert_eq!(
+            parse(b"x *. y"),
+            Ok((
+                (&[][..]).into(),
+                Syntax::FloatBin(
+                    FloatBin::FMul,
+                    Box::new(Var("x".to_string())),
+                    Box::new(Var("y".to_string()))
+                )
+            ))
+        );
+        assert_eq!(
+            parse(b"x /. y *. z"),
+            Ok((
+                (&[][..]).into(),
+                Syntax::FloatBin(
+                    FloatBin::FMul,
+                    Box::new(Syntax::FloatBin(
+                        FloatBin::FDiv,
+                        Box::new(Var("x".to_string())),
+                        Box::new(Var("y".to_string()))
+                    )),
+                    Box::new(Var("z".to_string()))
+                )
+            ))
+        );
     }
 
     #[test]
     fn test_multadd() {
+        use syntax::FloatBin;
         use syntax::Syntax;
         use syntax::Syntax::Var;
-        use syntax::FloatBin;
-        assert_eq!(parse(b"x /. y +. z"),
-                   Ok(((&[][..]).into(),
-                       Syntax::FloatBin(
-                           FloatBin::FAdd,
-                           Box::new(Syntax::FloatBin(
-                               FloatBin::FDiv,
-                               Box::new(Var("x".to_string())),
-                               Box::new(Var("y".to_string())))),
-                           Box::new(Var("z".to_string()))))));
-        assert_eq!(parse(b"a -. b /. c"),
-                   Ok(((&[][..]).into(),
-                       Syntax::FloatBin(
-                           FloatBin::FSub,
-                           Box::new(Var("a".to_string())),
-                           Box::new(Syntax::FloatBin(
-                               FloatBin::FDiv,
-                               Box::new(Var("b".to_string())),
-                               Box::new(Var("c".to_string()))))))));
+        assert_eq!(
+            parse(b"x /. y +. z"),
+            Ok((
+                (&[][..]).into(),
+                Syntax::FloatBin(
+                    FloatBin::FAdd,
+                    Box::new(Syntax::FloatBin(
+                        FloatBin::FDiv,
+                        Box::new(Var("x".to_string())),
+                        Box::new(Var("y".to_string()))
+                    )),
+                    Box::new(Var("z".to_string()))
+                )
+            ))
+        );
+        assert_eq!(
+            parse(b"a -. b /. c"),
+            Ok((
+                (&[][..]).into(),
+                Syntax::FloatBin(
+                    FloatBin::FSub,
+                    Box::new(Var("a".to_string())),
+                    Box::new(Syntax::FloatBin(
+                        FloatBin::FDiv,
+                        Box::new(Var("b".to_string())),
+                        Box::new(Var("c".to_string()))
+                    ))
+                )
+            ))
+        );
     }
 
     #[test]
     fn test_unary_minus() {
-        use syntax::Syntax::{Int, Float, Neg, FNeg, Var};
-        assert_eq!(parse(b"-2"),
-                   Ok(((&[][..]).into(),
-                       Neg(Box::new(Int(2))))));
-        assert_eq!(parse(b"--2"),
-                   Ok(((&[][..]).into(),
-                       Neg(Box::new(Neg(
-                           Box::new(Int(2))))))));
-        assert_eq!(parse(b"-.x"),
-                   Ok(((&[][..]).into(),
-                       FNeg(
-                           Box::new(Var("x".to_string()))))));
+        use syntax::Syntax::{FNeg, Float, Int, Neg, Var};
+        assert_eq!(parse(b"-2"), Ok(((&[][..]).into(), Neg(Box::new(Int(2))))));
+        assert_eq!(
+            parse(b"--2"),
+            Ok(((&[][..]).into(), Neg(Box::new(Neg(Box::new(Int(2)))))))
+        );
+        assert_eq!(
+            parse(b"-.x"),
+            Ok(((&[][..]).into(), FNeg(Box::new(Var("x".to_string())))))
+        );
         // - followed by float literal is ok.
-        assert_eq!(parse(b"-2.0"),
-                   Ok(((&[][..]).into(),
-                       FNeg(Box::new(Float(2.0.into()))))));
+        assert_eq!(
+            parse(b"-2.0"),
+            Ok(((&[][..]).into(), FNeg(Box::new(Float(2.0.into())))))
+        );
     }
 
     #[test]
     fn test_exp_not() {
         use syntax::Syntax::{Bool, Not};
-        assert_eq!(parse(b"!!true"),
-                   Ok(((&[][..]).into(),
-                       Not(Box::new(Not(
-                           Box::new(Bool(true))))))));
+        assert_eq!(
+            parse(b"!!true"),
+            Ok(((&[][..]).into(), Not(Box::new(Not(Box::new(Bool(true)))))))
+        );
     }
-    
+
     #[test]
     fn test_app() {
         use syntax::Syntax::{App, Int, Var};
-        assert_eq!(parse(b"func 0 1"),
-                   Ok(((&[][..]).into(),
-                       App(
-                           Box::new(Var("func".to_string())),
-                           Box::new([Int(0), Int(1)])))));
+        assert_eq!(
+            parse(b"func 0 1"),
+            Ok((
+                (&[][..]).into(),
+                App(
+                    Box::new(Var("func".to_string())),
+                    Box::new([Int(0), Int(1)])
+                )
+            ))
+        );
     }
 
     #[test]
     fn test_array_create() {
         use syntax::Syntax::{Array, Int};
-        assert_eq!(parse(b"Array.create 2 3"),
-                   Ok(((&[][..]).into(),
-                       Array(
-                           Box::new(Int(2)),
-                           Box::new(Int(3))))));
+        assert_eq!(
+            parse(b"Array.create 2 3"),
+            Ok(((&[][..]).into(), Array(Box::new(Int(2)), Box::new(Int(3)))))
+        );
     }
 }

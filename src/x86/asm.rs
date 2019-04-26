@@ -1,7 +1,7 @@
-use syntax::{IntBin, FloatBin, Type};
 use id;
-use std::collections::{HashSet};
+use std::collections::HashSet;
 use std::fmt;
+use syntax::{FloatBin, IntBin, Type};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum IdOrImm {
@@ -75,16 +75,16 @@ impl Asm {
             Asm::Ans(e) => {
                 write!(f, "ret ")?;
                 e.fmt2(f, level)
-            },
+            }
             Asm::Let(x, t, e1, e2) => {
                 write!(f, "let {}: {} = ", x, t)?;
                 e1.fmt2(f, level)?;
                 writeln!(f, " in")?;
-                for _ in 0 .. level {
+                for _ in 0..level {
                     write!(f, " ")?;
                 }
                 e2.fmt2(f, level)
-            },
+            }
         }
     }
 }
@@ -102,10 +102,9 @@ impl Exp {
                     IntBin::Sub => "sub",
                 };
                 write!(f, "{} {} {}", op_string, x, y)
-            },
+            }
             Exp::Ld(x, y, offset) => write!(f, "ld {} {} {}", x, y, offset),
-            Exp::St(z, x, y, offset) =>
-                write!(f, "st {} {} {} {}", z, x, y, offset),
+            Exp::St(z, x, y, offset) => write!(f, "st {} {} {} {}", z, x, y, offset),
             Exp::FMovD(x) => write!(f, "fmov {}", x),
             Exp::FNegD(x) => write!(f, "fneg {}", x),
             Exp::FloatOp(op, x, y) => {
@@ -116,10 +115,9 @@ impl Exp {
                     FloatBin::FDiv => "fdiv",
                 };
                 write!(f, "{} {} {}", op_string, x, y)
-            },
+            }
             Exp::LdDF(x, y, offset) => write!(f, "lddf {} {} {}", x, y, offset),
-            Exp::StDF(z, x, y, offset) =>
-                write!(f, "stdf {} {} {} {}", z, x, y, offset),
+            Exp::StDF(z, x, y, offset) => write!(f, "stdf {} {} {} {}", z, x, y, offset),
             Exp::Comment(comment) => write!(f, ";; {}", comment),
             Exp::IfComp(op, x, y, e1, e2) => {
                 let op_string = match op {
@@ -128,40 +126,40 @@ impl Exp {
                     CompBin::GE => "ge",
                 };
                 writeln!(f, "if {} {} {} then", op_string, x, y)?;
-                for _ in 0 .. level + 2 {
+                for _ in 0..level + 2 {
                     write!(f, " ")?;
                 }
                 e1.fmt2(f, level + 2)?;
                 writeln!(f)?;
-                for _ in 0 .. level {
+                for _ in 0..level {
                     write!(f, " ")?;
                 }
                 writeln!(f, "else")?;
-                for _ in 0 .. level + 2 {
+                for _ in 0..level + 2 {
                     write!(f, " ")?;
                 }
                 e2.fmt2(f, level + 2)
-            },
+            }
             Exp::IfFComp(op, x, y, e1, e2) => {
                 let op_string = match op {
                     FCompBin::Eq => "feq",
                     FCompBin::LE => "fle",
                 };
                 writeln!(f, "if {} {} {} then", op_string, x, y)?;
-                for _ in 0 .. level + 2 {
+                for _ in 0..level + 2 {
                     write!(f, " ")?;
                 }
                 e1.fmt2(f, level + 2)?;
                 writeln!(f)?;
-                for _ in 0 .. level {
+                for _ in 0..level {
                     write!(f, " ")?;
                 }
                 writeln!(f, "else")?;
-                for _ in 0 .. level + 2 {
+                for _ in 0..level + 2 {
                     write!(f, " ")?;
                 }
                 e2.fmt2(f, level + 2)
-            },
+            }
             Exp::CallCls(name, ys, zs) => {
                 write!(f, "[{}]", name)?;
                 for v in ys.iter() {
@@ -172,7 +170,7 @@ impl Exp {
                     write!(f, " {}", v)?;
                 }
                 Ok(())
-            },
+            }
             Exp::CallDir(id::L(name), ys, zs) => {
                 write!(f, "{}", name)?;
                 for v in ys.iter() {
@@ -182,9 +180,8 @@ impl Exp {
                     write!(f, " fl:{}", v)?;
                 }
                 Ok(())
-            },
-            Exp::Save(varname, regname) =>
-                write!(f, "SAVE {} {}", varname, regname),
+            }
+            Exp::Save(varname, regname) => write!(f, "SAVE {} {}", varname, regname),
             Exp::Restore(x) => write!(f, "restore {}", x),
         }
     }
@@ -209,8 +206,13 @@ impl fmt::Display for Exp {
 }
 impl fmt::Display for Fundef {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let Fundef { name: id::L(name), args, fargs, body, ret }
-        = self;
+        let Fundef {
+            name: id::L(name),
+            args,
+            fargs,
+            body,
+            ret,
+        } = self;
         write!(f, "asm-define {}", name)?;
         for y in args.iter() {
             write!(f, " ({}: intptr)", y)?;
@@ -247,6 +249,14 @@ pub fn seq(id_gen: &mut id::IdGen, e1: Exp, e2: Asm) -> Asm {
 
 const REGS: [&str; 6] = ["%eax", "%ebx", "%ecx", "%edx", "%esi", "%edi"];
 
+pub fn regs() -> Vec<String> {
+    let mut res = vec!["".to_string(); 6];
+    for i in 0..6 {
+        res[i] = REGS[i].to_string();
+    }
+    res
+}
+
 pub fn fregs() -> Vec<String> {
     let mut res = vec!["".to_string(); 8];
     for (i, item) in res.iter_mut().enumerate() {
@@ -278,46 +288,40 @@ fn fv_id_or_imm(x: &IdOrImm) -> HashSet<String> {
 
 /// ys: integral parameters, zs: float parameters. Taylor-made for the following fn fv_exp().
 fn fv_parameters(ys: &[String], zs: &[String]) -> HashSet<String> {
-    &ys.iter().cloned().collect::<HashSet<_>>() |
-    &zs.iter().cloned().collect::<HashSet<_>>()
+    &ys.iter().cloned().collect::<HashSet<_>>() | &zs.iter().cloned().collect::<HashSet<_>>()
 }
 
 fn fv_exp(x: &Exp) -> HashSet<String> {
     match x {
-        Exp::Nop | Exp::Set(_) |
-        Exp::SetL(_) | Exp::Comment(_) | Exp::Restore(_) => build_set!(),
-        Exp::Mov(x) | Exp::Neg(x) |
-        Exp::FMovD(x) | Exp::FNegD(x) | Exp::Save(x, _) =>
-            build_set!(x),
-        Exp::IntOp(_, x, yp) | Exp::Ld(x, yp, _) |
-        Exp::LdDF(x, yp, _) => {
+        Exp::Nop | Exp::Set(_) | Exp::SetL(_) | Exp::Comment(_) | Exp::Restore(_) => build_set!(),
+        Exp::Mov(x) | Exp::Neg(x) | Exp::FMovD(x) | Exp::FNegD(x) | Exp::Save(x, _) => {
+            build_set!(x)
+        }
+        Exp::IntOp(_, x, yp) | Exp::Ld(x, yp, _) | Exp::LdDF(x, yp, _) => {
             let mut ret = fv_id_or_imm(yp);
             ret.insert(x.to_string());
             ret
-        },
-        Exp::St(x, y, zp, _) |
-        Exp::StDF(x, y, zp, _) => {
+        }
+        Exp::St(x, y, zp, _) | Exp::StDF(x, y, zp, _) => {
             let mut ret = fv_id_or_imm(zp);
             ret.insert(x.to_string());
             ret.insert(y.to_string());
             ret
-        },
-        Exp::FloatOp(_, x, y) =>
-            build_set!(x, y),
+        }
+        Exp::FloatOp(_, x, y) => build_set!(x, y),
         Exp::IfComp(_, x, yp, e1, e2) => {
             let h = build_set!(x);
             let s1 = fv(e1);
             let s2 = fv(e2);
             &(&h | &s1) | &(&s2 | &fv_id_or_imm(yp))
-        },
+        }
         Exp::IfFComp(_, x, y, e1, e2) => {
             let h = build_set!(x, y);
             let s1 = fv(e1);
             let s2 = fv(e2);
             &(&h | &s1) | &s2
-        },
-        Exp::CallCls(x, ys, zs) =>
-            &build_set!(x) | &fv_parameters(ys, zs),
+        }
+        Exp::CallCls(x, ys, zs) => &build_set!(x) | &fv_parameters(ys, zs),
         Exp::CallDir(_, ys, zs) => fv_parameters(ys, zs),
     }
 }
@@ -325,16 +329,14 @@ fn fv_exp(x: &Exp) -> HashSet<String> {
 pub fn fv(e: &Asm) -> HashSet<String> {
     match e {
         Asm::Ans(exp) => fv_exp(exp),
-        Asm::Let(x, _, exp, e) =>
-            &fv_exp(exp) | &(&fv(e) - &build_set!(x)),
+        Asm::Let(x, _, exp, e) => &fv_exp(exp) | &(&fv(e) - &build_set!(x)),
     }
 }
 
 pub fn concat(e1: Asm, x: String, t: Type, e2: Asm) -> Asm {
     match e1 {
         Asm::Ans(exp) => Asm::Let(x, t, exp, Box::new(e2)),
-        Asm::Let(y, yt, exp, e1p) =>
-            Asm::Let(y, yt, exp, Box::new(concat(*e1p, x, t, e2))),
+        Asm::Let(y, yt, exp, e1p) => Asm::Let(y, yt, exp, Box::new(concat(*e1p, x, t, e2))),
     }
 }
 
