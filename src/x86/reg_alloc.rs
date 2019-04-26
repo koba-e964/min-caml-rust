@@ -12,7 +12,7 @@ type Result<T> = std::result::Result<T, NoReg>;
 pub fn f(Prog(data, fundefs, e): Prog, id_gen: &mut IdGen) -> Prog {
     eprintln!("register allocation: may take some time (up to a few minutes, depending on the size of functions).");
     let fundefs_p = fundefs.into_vec().into_iter().map(|f| h(f, id_gen)).collect();
-    let (e_p, regenv_p) = g(&(id_gen.gen_tmp(&Type::Unit), Type::Unit),
+    let (e_p, _regenv_p) = g(&(id_gen.gen_tmp(&Type::Unit), Type::Unit),
                             Asm::Ans(Exp::Nop),
                             &HashMap::new(),
                             e, id_gen);
@@ -73,7 +73,7 @@ fn g(dest: &(String, Type), cont: Asm, regenv: &RegEnv, asm: Asm,
             let mut targets_sources = targets.clone();
             targets_sources.extend_from_slice(&sources);
             match alloc(cont_p, &regenv1, x.clone(), t.clone(), &targets_sources) {
-                AllocResult::Spill(_) => panic!(),
+                AllocResult::Spill(_) => unimplemented!(),
                 AllocResult::Alloc(reg) => {
                     let (e2_p, regenv2) =
                         g(dest, cont, &add(x.clone(), reg.clone(), regenv1), *e,
@@ -149,6 +149,16 @@ fn g_exp(dest: &(String, Type), cont: Asm, regenv: &RegEnv,
                        Box::new(e1_p), Box::new(e2_p)));
             return g_exp_if(dest, cont, regenv, k, *e1, *e2, id_gen);
         }
+        CallCls(x, ys, zs) => {
+            let regs = asm::regs();
+            let fregs = asm::fregs();
+            if ys.len() > regs.len() - 1 || zs.len() > fregs.len() {
+                panic!("cannot allocate registers for arguments to {}", x);
+            }
+            let k = |ys: Vec<_>, zs: Vec<_>|
+            CallCls(x.clone(), ys.into_boxed_slice(), zs.into_boxed_slice());
+            return g_exp_call(dest, cont, regenv, k, ys.into_vec(), zs.into_vec(), id_gen);
+        }
         CallDir(id::L(x), ys, zs) => {
             let regs = asm::regs();
             let fregs = asm::fregs();
@@ -156,25 +166,11 @@ fn g_exp(dest: &(String, Type), cont: Asm, regenv: &RegEnv,
                 panic!("cannot allocate registers for arguments to {}", x);
             }
             let k = |ys: Vec<_>, zs: Vec<_>|
-            Ok(CallDir(id::L(x.clone()), ys.into_boxed_slice(), zs.into_boxed_slice()));
+            CallDir(id::L(x.clone()), ys.into_boxed_slice(), zs.into_boxed_slice());
             return g_exp_call(dest, cont, regenv, k, ys.into_vec(), zs.into_vec(), id_gen);
         }
-        _ => panic!(),
     };
     Ok((asm, regenv.clone()))
-    /*
-g' dest cont regenv = function (* 各命令のレジスタ割り当て (caml2html: regalloc_gprime) *)
-  | CallCls(x, ys, zs) as exp ->
-      if List.length ys > Array.length regs - 1 || List.length zs > Array.length fregs then
-        failwith (Format.sprintf "cannot allocate registers for arugments to %s" x)
-      else
-        g'_call dest cont regenv exp (fun ys zs -> CallCls(find x Type.Int regenv, ys, zs)) ys zs
-  | CallDir(Id.L(x), ys, zs) as exp ->
-      if List.length ys > Array.length regs || List.length zs > Array.length fregs then
-        failwith (Format.sprintf "cannot allocate registers for arugments to %s" x)
-      else
-        g'_call dest cont regenv exp (fun ys zs -> CallDir(Id.L(x), ys, zs)) ys zs
-        */
 }
 
 fn g_exp_if<F>(dest: &(String, Type), cont: Asm, regenv: &RegEnv,
@@ -208,12 +204,12 @@ where F: Fn(Asm, Asm) -> Result<Exp> {
 
 fn g_exp_call<F>(dest: &(String, Type), cont: Asm, regenv: &RegEnv,
                  constr: F, ys: Vec<String>, zs: Vec<String>, id_gen: &mut IdGen) -> Result<(Asm, RegEnv)>
-where F: Fn(Vec<String>, Vec<String>) -> Result<Exp> {
+where F: Fn(Vec<String>, Vec<String>) -> Exp {
     let empty_regenv = HashMap::new();
     // Note that Iterator<Result<A, E>> can be collected into Result<Vec<A>, E>.
     let ys = ys.into_iter().map(|y| find(&y, &Type::Int, regenv)).collect::<Result<_>>()?;
     let zs = zs.into_iter().map(|z| find(&z, &Type::Float, regenv)).collect::<Result<_>>()?;
-    let mut e = Asm::Ans(constr(ys, zs)?);
+    let mut e = Asm::Ans(constr(ys, zs));
     for x in asm::fv(&cont) {
         if x == dest.0 || !regenv.contains_key(&x) {
         } else {
