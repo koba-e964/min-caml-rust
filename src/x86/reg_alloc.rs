@@ -556,5 +556,28 @@ mod tests {
         );
     }
     #[test]
-    fn test_g_exp() {}
+    fn test_alloc() {
+        let cont = Asm::Ans(Exp::Nop);
+        let regenv = HashMap::new();
+        let x = "a".to_string();
+            let t = Type::Int;
+        let preference = ["%eax".to_string()];
+        assert_eq!(
+            alloc(cont, &regenv, x, t, &preference),
+            AllocResult::Alloc("%eax".to_string()),
+        )
+    }
+    #[test]
+    fn test_alloc_not_in_preference() {
+        let cont = Asm::Ans(Exp::Mov("b".to_string()));
+        let regenv = vec![("b".to_string(), "%eax".to_string())]
+            .into_iter().collect();
+        let x = "a".to_string();
+            let t = Type::Int;
+        let preference = ["%eax".to_string()];
+        assert_eq!(
+            alloc(cont, &regenv, x, t, &preference),
+            AllocResult::Alloc("%ebx".to_string()),
+        )
+    }
 }
