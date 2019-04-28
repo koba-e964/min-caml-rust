@@ -10,7 +10,7 @@ use min_caml_rust::{
 use nom::Err;
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::Read;
+use std::io::{BufWriter, Read, Write};
 use std::path::Path;
 
 const ITER_MAX: usize = 1000; // The max number of iteration
@@ -62,13 +62,20 @@ fn main() {
     println!("Mitou Min-Caml Compiler (C) Eijiro Sumii\n (Port to Rust)");
     let args: Vec<String> = std::env::args().collect();
     if args.len() <= 1 {
-        println!(" usage: ./min-caml-rust [ML FILENAME]");
+        println!(" usage: ./min-caml-rust [ML FILENAME] [OUTPUT FILENAME]");
         return;
     }
     let filename = &args[1];
     let path = Path::new(&filename);
+    let mut output_pathbuf;
+    if args.len() == 2 {
+        output_pathbuf = path.to_path_buf();
+        output_pathbuf.set_extension("asm");
+    } else {
+        output_pathbuf = Path::new(&args[2]).to_path_buf();
+    }
     let program = read_from_file(&path).unwrap();
-    run(&program);
+    run(&program, &output_pathbuf).unwrap();
 }
 
 fn read_from_file(path: &Path) -> Result<Vec<u8>, std::io::Error> {
@@ -78,7 +85,7 @@ fn read_from_file(path: &Path) -> Result<Vec<u8>, std::io::Error> {
     Ok(program)
 }
 
-fn run(program: &[u8]) {
+fn run(program: &[u8], output_path: &Path) -> Result<(), std::io::Error> {
     let mut id_gen = id::IdGen::new();
     let program = match parser::remove_comments(program) {
         Ok(p) => p,
@@ -123,4 +130,9 @@ fn run(program: &[u8]) {
     let reg_alloc = x86::reg_alloc::f(simm, &mut id_gen);
     println!("reg_alloc = {}", reg_alloc);
     println!();
+
+    // Write to file
+    let mut outfile = BufWriter::new(File::create(output_path)?);
+    write!(outfile, "{}\n", reg_alloc)?;
+    Ok(())
 }

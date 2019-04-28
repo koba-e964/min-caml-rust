@@ -2,8 +2,12 @@ success=0
 total=0
 if cargo build --release; then
     for i in test/*.ml; do
-	if cargo run --release -q -- $i >/dev/null; then
+        echo "---- ${i} ----"
+        cat ${i}
+	if cargo run --release -q -- ${i} ${i}.asm >/dev/null; then
 	    echo "[OK] $i"
+            cat ${i}.asm
+            echo; echo
 	    success=`expr $success + 1`
 	else
 	    echo "[Error] $i"
