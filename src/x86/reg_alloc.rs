@@ -340,34 +340,51 @@ fn target(src: &str, dest: &(String, Type), asm: &Asm) -> (bool, Vec<String>) {
     }
 }
 
-fn target_exp(src: &str, (ref dest, ref t): &(String, Type), exp: &Exp) -> (bool, Vec<String>) {
+fn target_exp(src: &str, dest_t: &(String, Type), exp: &Exp) -> (bool, Vec<String>) {
     use self::Exp::*;
+    let (ref dest, ref t) = dest_t;
     match exp {
-        Mov(ref x) if x == &src && asm::is_reg(&dest) => {
+        Mov(ref x) if x == src && asm::is_reg(&dest) => {
             assert_ne!(t, &Type::Unit);
             assert_ne!(t, &Type::Float);
             (false, vec![dest.clone()])
         }
+        FMovD(ref x) if x == src && asm::is_reg(dest) => {
+            assert_eq!(t, &Type::Float);
+            (false, vec![dest.clone()])
+        }
+        IfComp(_, _, _, ref e1, ref e2) | IfFComp(_, _, _, ref e1, ref e2) => {
+            let (c1, mut rs1) = target(src, dest_t, e1);
+            let (c2, rs2) = target(src, dest_t, e2);
+            rs1.extend_from_slice(&rs2);
+            (c1 && c2, rs1)
+        }
+        CallCls(ref x, ref ys, ref zs) => {
+            let mut target = target_args(src, &asm::regs(), ys);
+            target.extend_from_slice(&target_args(src, &asm::fregs(), zs));
+            if x == src {
+                target.push(asm::reg_cl().to_string());
+            }
+            (true, target)
+        }
+        CallDir(_, ref ys, ref zs) => {
+            let mut target = target_args(src, &asm::regs(), ys);
+            target.extend_from_slice(&target_args(src, &asm::fregs(), zs));
+            (true, target)
+        }
         _ => (false, vec![]),
     }
-    /*
-    | FMovD(x) when x = src && is_reg dest ->
-        assert (t = Type.Float);
-        false, [dest]
-    | IfEq(_, _, e1, e2) | IfLE(_, _, e1, e2) | IfGE(_, _, e1, e2)
-    | IfFEq(_, _, e1, e2) | IfFLE(_, _, e1, e2) ->
-        let c1, rs1 = target src (dest, t) e1 in
-        let c2, rs2 = target src (dest, t) e2 in
-        c1 && c2, rs1 @ rs2
-    | CallCls(x, ys, zs) ->
-        true, (target_args src regs 0 ys @
-               target_args src fregs 0 zs @
-               if x = src then [reg_cl] else [])
-    | CallDir(_, ys, zs) ->
-        true, (target_args src regs 0 ys @
-               target_args src fregs 0 zs)
-    | _ -> false, []
-       */
+}
+
+fn target_args(src: &str, all: &[String], ys: &[String]) -> Vec<String> {
+    let mut ans = vec![];
+    assert!(ys.len() <= all.len() - 1);
+    for i in 0..ys.len() {
+        if ys[i] == src {
+            ans.push(all[i].clone());
+        }
+    }
+    ans
 }
 
 /// The author hasn't understood the meaning of this function.
