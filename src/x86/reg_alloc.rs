@@ -560,7 +560,7 @@ mod tests {
         let cont = Asm::Ans(Exp::Nop);
         let regenv = HashMap::new();
         let x = "a".to_string();
-            let t = Type::Int;
+        let t = Type::Int;
         let preference = ["%eax".to_string()];
         assert_eq!(
             alloc(cont, &regenv, x, t, &preference),
@@ -571,9 +571,10 @@ mod tests {
     fn test_alloc_not_in_preference() {
         let cont = Asm::Ans(Exp::Mov("b".to_string()));
         let regenv = vec![("b".to_string(), "%eax".to_string())]
-            .into_iter().collect();
+            .into_iter()
+            .collect();
         let x = "a".to_string();
-            let t = Type::Int;
+        let t = Type::Int;
         let preference = ["%eax".to_string()];
         assert_eq!(
             alloc(cont, &regenv, x, t, &preference),
