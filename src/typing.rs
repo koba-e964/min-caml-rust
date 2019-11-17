@@ -162,7 +162,7 @@ fn unify(
                 return Err(TypingError::Unify(t1.clone(), t2.clone()));
             }
             for i in 0..n {
-                try!(invoke!(&$t1s[i], &$t2s[i]));
+                invoke!(&$t1s[i], &$t2s[i])?;
             }
         };
     }
@@ -211,7 +211,7 @@ fn g(
     }
     macro_rules! typed {
         ($e:expr, $ty:expr) => {
-            try!(unify(&$ty, &try!(invoke!(env, $e)), extenv, tyenv))
+            unify(&$ty, &invoke!(env, $e)?, extenv, tyenv)?
         };
     }
     /* map (g env) to an &[Syntax]
@@ -221,7 +221,7 @@ fn g(
         ($es:expr) => {{
             let mut argtype = Vec::new();
             for e in $es.iter() {
-                argtype.push(try!(invoke!(env, e)));
+                argtype.push(invoke!(env, e)?);
             }
             argtype.into_boxed_slice()
         }};
@@ -254,19 +254,14 @@ fn g(
             Ok(Type::Float)
         }
         Syntax::CompBin(_, e1, e2) => {
-            try!(unify(
-                &try!(invoke!(env, e1)),
-                &try!(invoke!(env, e2)),
-                extenv,
-                tyenv
-            ));
+            unify(&invoke!(env, e1)?, &invoke!(env, e2)?, extenv, tyenv)?;
             Ok(Type::Bool)
         }
         Syntax::If(e1, e2, e3) => {
             typed!(e1, Type::Bool);
-            let t2 = try!(invoke!(env, e2));
-            let t3 = try!(invoke!(env, e3));
-            try!(unify(&t2, &t3, extenv, tyenv));
+            let t2 = invoke!(env, e2)?;
+            let t3 = invoke!(env, e3)?;
+            unify(&t2, &t3, extenv, tyenv)?;
             Ok(t2)
         }
         Syntax::Let((x, t), e1, e2) => {
@@ -298,18 +293,18 @@ fn g(
             for (x, t) in yts.iter() {
                 cp_env_body.insert(x.to_string(), t.clone());
             }
-            try!(unify(
+            unify(
                 &t,
                 &Type::Fun(
                     yts.iter()
                         .map(|xt| xt.1.clone())
                         .collect::<Vec<_>>()
                         .into_boxed_slice(), // List.map snd yts
-                    Box::new(try!(invoke!(&cp_env_body, &e1)))
+                    Box::new(invoke!(&cp_env_body, &e1)?),
                 ),
                 extenv,
-                tyenv
-            ));
+                tyenv,
+            )?;
             invoke!(&cp_env, e2)
         }
         Syntax::App(e, es) => {
@@ -340,7 +335,7 @@ fn g(
         }
         Syntax::Array(e1, e2) => {
             typed!(e1, Type::Int);
-            let t = try!(invoke!(env, e2));
+            let t = invoke!(env, e2)?;
             Ok(Type::Array(Box::new(t)))
         }
         Syntax::Get(e1, e2) => {
@@ -350,7 +345,7 @@ fn g(
             Ok(t)
         }
         Syntax::Put(e1, e2, e3) => {
-            let t = try!(invoke!(env, e3));
+            let t = invoke!(env, e3)?;
             typed!(e1, Type::Array(Box::new(t.clone())));
             typed!(e2, Type::Int);
             Ok(Type::Unit)
