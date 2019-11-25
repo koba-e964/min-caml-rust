@@ -88,11 +88,11 @@ mod tests {
 
     #[test]
     fn movrr_display() -> Result<(), Error> {
-        let eax: R64 = TryFrom::try_from("%eax")?;
-        let ebx: R64 = TryFrom::try_from("%ebx")?;
-        let instr = Instr::MovRR(eax, ebx);
+        let rax: R64 = TryFrom::try_from("%rax")?;
+        let rbx: R64 = TryFrom::try_from("%rbx")?;
+        let instr = Instr::MovRR(rax, rbx);
         let repr = format!("{}", instr);
-        assert_eq!(repr, "    mov %eax, %ebx\n");
+        assert_eq!(repr, "    movq %rax, %rbx\n");
         Ok(())
     }
 }

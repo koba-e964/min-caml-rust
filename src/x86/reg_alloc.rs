@@ -532,10 +532,10 @@ mod tests {
     use super::*;
     #[test]
     fn test_find() {
-        let regenv = vec![("aa".to_string(), "%eax".to_string())]
+        let regenv = vec![("aa".to_string(), "%rax".to_string())]
             .into_iter()
             .collect();
-        assert_eq!(find("aa", &Type::Int, &regenv), Ok("%eax".to_string()));
+        assert_eq!(find("aa", &Type::Int, &regenv), Ok("%rax".to_string()));
         assert_eq!(
             find("bb", &Type::Int, &regenv),
             Err(NoReg("bb".to_string(), Type::Int))
@@ -543,12 +543,12 @@ mod tests {
     }
     #[test]
     fn test_find_p() {
-        let regenv = vec![("aa".to_string(), "%eax".to_string())]
+        let regenv = vec![("aa".to_string(), "%rax".to_string())]
             .into_iter()
             .collect();
         assert_eq!(
             find_p(&IdOrImm::V("aa".to_string()), &regenv),
-            Ok(IdOrImm::V("%eax".to_string()))
+            Ok(IdOrImm::V("%rax".to_string()))
         );
         assert_eq!(
             find_p(&IdOrImm::V("bb".to_string()), &regenv),
@@ -561,24 +561,24 @@ mod tests {
         let regenv = HashMap::new();
         let x = "a".to_string();
         let t = Type::Int;
-        let preference = ["%eax".to_string()];
+        let preference = ["%rax".to_string()];
         assert_eq!(
             alloc(cont, &regenv, x, t, &preference),
-            AllocResult::Alloc("%eax".to_string()),
+            AllocResult::Alloc("%rax".to_string()),
         )
     }
     #[test]
     fn test_alloc_not_in_preference() {
         let cont = Asm::Ans(Exp::Mov("b".to_string()));
-        let regenv = vec![("b".to_string(), "%eax".to_string())]
+        let regenv = vec![("b".to_string(), "%rax".to_string())]
             .into_iter()
             .collect();
         let x = "a".to_string();
         let t = Type::Int;
-        let preference = ["%eax".to_string()];
+        let preference = ["%rax".to_string()];
         assert_eq!(
             alloc(cont, &regenv, x, t, &preference),
-            AllocResult::Alloc("%ebx".to_string()),
+            AllocResult::Alloc("%rbx".to_string()),
         )
     }
 }
