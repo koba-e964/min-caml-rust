@@ -130,9 +130,15 @@ fn run(program: &[u8], output_path: &Path) -> Result<(), std::io::Error> {
     let reg_alloc = x86::reg_alloc::f(simm, &mut id_gen);
     println!("reg_alloc = {}", reg_alloc);
     println!();
+    let emitted = x86::emit::f(reg_alloc, &mut id_gen).unwrap();
+    for row in &emitted {
+        print!("{}", row);
+    }
 
     // Write to file
     let mut outfile = BufWriter::new(File::create(output_path)?);
-    write!(outfile, "{}\n", reg_alloc)?;
+    for row in &emitted {
+        write!(outfile, "{}", row)?;
+    }
     Ok(())
 }

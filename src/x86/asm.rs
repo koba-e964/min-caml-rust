@@ -247,7 +247,7 @@ pub fn seq(id_gen: &mut id::IdGen, e1: Exp, e2: Asm) -> Asm {
     Asm::Let(id, Type::Unit, e1, Box::new(e2))
 }
 
-const REGS: [&str; 6] = ["%eax", "%ebx", "%ecx", "%edx", "%esi", "%edi"];
+pub const REGS: [&str; 6] = ["%rax", "%rbx", "%rcx", "%rdx", "%rsi", "%rdi"];
 
 pub fn regs() -> Vec<String> {
     let mut res = vec!["".to_string(); 6];

@@ -1,5 +1,5 @@
 #[derive(Debug)]
-pub struct RegisterNameError;
+pub struct RegisterNameError(pub String);
 
 #[derive(Debug)]
 pub enum Error {

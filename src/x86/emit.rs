@@ -1,12 +1,14 @@
 use std::collections::HashSet;
+use std::convert::TryInto;
 
 use id;
 use id::IdGen;
-use std::io::Write;
 use syntax::Type;
 use x86::asm;
-use x86::asm::{Asm, Exp, Fundef, IdOrImm, Prog};
-
+use x86::asm::{Asm, Exp, Fundef, IdOrImm, Prog, REGS, REG_SP};
+use x86::error::Error;
+use x86::instr::Instr;
+use x86::instr::Instr::MovRR;
 /*
 open Asm
 
@@ -18,32 +20,41 @@ let stackset = ref S.empty (* すでにSaveされた変数の集合 (caml2html: 
 
  */
 
-type StackSet = HashSet<String>;
-type StackMap = Vec<String>;
-fn save(x: &str, stackset: &mut StackSet, stackmap: &mut StackMap) {
-    stackset.insert(x.to_string());
-    if stackmap.iter().all(|y| x != y) {
-        stackmap.push(x.to_string());
-    }
+struct StackState {
+    stack_set: HashSet<String>,
+    stack_map: Vec<String>,
 }
 
-fn savef(x: &str, stackset: &mut StackSet, stackmap: &mut StackMap, id_gen: &mut IdGen) {
-    stackset.insert(x.to_string());
-    if stackmap.iter().all(|y| x != y) {
-        if stackmap.len() % 2 == 1 {
-            stackmap.push(id_gen.gen_tmp(&Type::Int));
+impl StackState {
+    fn new() -> Self {
+        StackState {
+            stack_set: Default::default(),
+            stack_map: Vec::new(),
         }
-        stackmap.push(x.to_string());
-        stackmap.push(x.to_string());
     }
-}
+    fn save(&mut self, x: &str) {
+        self.stack_set.insert(x.to_string());
+        if self.stack_map.iter().all(|y| x != y) {
+            self.stack_map.push(x.to_string());
+        }
+    }
+    fn savef(&mut self, x: &str, id_gen: &mut IdGen) {
+        self.stack_set.insert(x.to_string());
+        if self.stack_map.iter().all(|y| x != y) {
+            self.stack_map.push(x.to_string());
+        }
+    }
 
-fn offset(x: &str, stackmap: &StackMap) -> i32 {
-    4 * stackmap.iter().position(|y| x == y).unwrap() as i32
-}
+    fn offset(&self, x: &str) -> Option<i32> {
+        self.stack_map
+            .iter()
+            .position(|y| x == y)
+            .map(|y| 8 * y as i32)
+    }
 
-fn stacksize(stackmap: &StackMap) -> i32 {
-    asm::align(4 * stackmap.len() as i32)
+    fn stacksize(&self) -> i32 {
+        asm::align(8 * self.stack_map.len() as i32)
+    }
 }
 
 fn pp_id_or_imm(value: &IdOrImm) -> String {
@@ -55,6 +66,12 @@ fn pp_id_or_imm(value: &IdOrImm) -> String {
 
 /// 関数呼び出しのために引数を並べ替える(register shuffling) (caml2html: emit_shuffle)
 fn shuffle(sw: &str, xys: &[(String, String)]) -> Vec<(String, String)> {
+    let xys: Vec<_> = xys
+        .iter()
+        .filter(|(ref x, ref y)| x != y)
+        .cloned()
+        .collect();
+
     panic!();
 }
 /*
@@ -74,13 +91,26 @@ let rec shuffle sw xys =
  */
 
 /// 末尾かどうかを表すデータ型 (caml2html: emit_dest)
+#[derive(Debug)]
 enum Dest {
     Tail,
     NonTail(String),
 }
 
-fn g(output: &mut impl Write, asm: Asm) -> Result<(), std::io::Error> {
-    panic!();
+fn g(
+    output: &mut Vec<Instr>,
+    stack_state: &mut StackState,
+    dest: Dest,
+    asm: Asm,
+) -> Result<(), Error> {
+    match asm {
+        Asm::Ans(exp) => g_exp(output, stack_state, dest, exp),
+        Asm::Let(x, t, exp, e) => {
+            g_exp(output, stack_state, Dest::NonTail(x), exp)?;
+            g(output, stack_state, dest, *e)?;
+            Ok(())
+        }
+    }
 }
 /*
 let rec g oc = function (* 命令列のアセンブリ生成 (caml2html: emit_g) *)
@@ -89,8 +119,51 @@ let rec g oc = function (* 命令列のアセンブリ生成 (caml2html: emit_g)
       g' oc (NonTail(x), exp);
       g oc (dest, e)
  */
-fn g_exp(output: &mut impl Write, exp: Exp) -> Result<(), std::io::Error> {
-    panic!();
+fn g_exp(
+    output: &mut Vec<Instr>,
+    stack_state: &mut StackState,
+    dest: Dest,
+    exp: Exp,
+) -> Result<(), Error> {
+    use self::Dest::{NonTail, Tail};
+    match (dest, exp) {
+        (NonTail(x), Exp::Set(i)) => output.push(Instr::MovIR(i, x.try_into()?)),
+        /*
+                  | NonTail(a), CallDir(Id.L(x), ys, zs) ->
+              g'_args oc [] ys zs;
+              let ss = stacksize () in
+              if ss > 0 then Printf.fprintf oc "\taddl\t$%d, %s\n" ss reg_sp;
+              Printf.fprintf oc "\tcall\t%s\n" x;
+              if ss > 0 then Printf.fprintf oc "\tsubl\t$%d, %s\n" ss reg_sp;
+              if List.mem a allregs && a <> regs.(0) then
+                Printf.fprintf oc "\tmovl\t%s, %s\n" regs.(0) a
+              else if List.mem a allfregs && a <> fregs.(0) then
+                Printf.fprintf oc "\tmovsd\t%s, %s\n" fregs.(0) a
+        */
+        (NonTail(a), Exp::CallDir(id::L(x), ys, zs)) => {
+            g_exp_args(
+                output,
+                stack_state,
+                "dummy".to_string(),
+                ys.into_vec(),
+                zs.into_vec(),
+            )?;
+            let ss = stack_state.stacksize();
+            if ss > 0 {
+                output.push(Instr::AddIR(ss, REG_SP.try_into()?));
+            }
+            output.push(Instr::Call(x));
+            if ss > 0 {
+                output.push(Instr::AddIR(-ss, REG_SP.try_into()?));
+            }
+            // TODO
+            if REGS[0] != a {
+                output.push(MovRR(REGS[0].try_into()?, a.try_into()?));
+            }
+        }
+        (dest, exp) => unimplemented!("{:?} {:?}", dest, exp),
+    }
+    Ok(())
 }
 /*
 and g' oc = function (* 各命令のアセンブリ生成 (caml2html: emit_gprime) *)
@@ -250,12 +323,12 @@ and g' oc = function (* 各命令のアセンブリ生成 (caml2html: emit_gprim
  */
 
 fn g_exp_tail_if(
-    output: &mut impl Write,
+    output: &mut Vec<Instr>,
     e1: Exp,
     e2: Exp,
     b: &str,
     bn: &str,
-) -> Result<(), std::io::Error> {
+) -> Result<(), Error> {
     panic!();
 }
 /*
@@ -269,13 +342,13 @@ and g'_tail_if oc e1 e2 b bn =
   g oc (Tail, e2)
 */
 fn g_exp_non_tail_if(
-    output: &mut impl Write,
+    output: &mut Vec<Instr>,
     dest: Dest,
     e1: Exp,
     e2: Exp,
     b: &str,
     bn: &str,
-) -> Result<(), std::io::Error> {
+) -> Result<(), Error> {
     panic!();
 }
 /*
@@ -295,12 +368,14 @@ and g'_non_tail_if oc dest e1 e2 b bn =
   stackset := S.inter stackset1 stackset2
  */
 fn g_exp_args(
-    output: &mut impl Write,
+    output: &mut Vec<Instr>,
+    stack_state: &mut StackState,
     x_reg_cl: String,
     ys: Vec<String>,
     zs: Vec<String>,
-) -> Result<(), std::io::Error> {
-    panic!();
+) -> Result<(), Error> {
+    // unimplemented!("x_reg_cl = {}, ys = {:?}, zs = {:?}", x_reg_cl, ys, zs);
+    Ok(())
 }
 /*
 and g'_args oc x_reg_cl ys zs =
@@ -326,7 +401,7 @@ and g'_args oc x_reg_cl ys zs =
  */
 
 fn h(
-    output: &mut impl Write,
+    output: &mut Vec<Instr>,
     Fundef {
         name: id::L(x),
         args: ys,
@@ -335,8 +410,9 @@ fn h(
         ret: t,
     }: Fundef,
     id_gen: &mut IdGen,
-) -> Result<(), std::io::Error> {
-    panic!();
+) -> Result<(), Error> {
+    output.push(Instr::Label(x));
+    g(output, &mut StackState::new(), Dest::Tail, e)
 }
 /*
 let h oc { name = Id.L(x); args = _; fargs = _; body = e; ret = _ } =
@@ -346,12 +422,40 @@ let h oc { name = Id.L(x); args = _; fargs = _; body = e; ret = _ } =
   g oc (Tail, e)
 */
 
-pub fn f(
-    output: &mut impl Write,
-    Prog(data, fundefs, e): Prog,
-    id_gen: &mut IdGen,
-) -> Result<(), std::io::Error> {
-    panic!();
+pub fn f(Prog(data, fundefs, e): Prog, id_gen: &mut IdGen) -> Result<Vec<Instr>, Error> {
+    let mut instrs = Vec::new();
+    instrs.push(Instr::Label(".data".to_string()));
+    instrs.push(Instr::BAlign(8));
+    for (id::L(x), d) in data.into_vec() {
+        // TODO
+    }
+    for fundef in fundefs.into_vec() {
+        h(&mut instrs, fundef, id_gen)?;
+    }
+    instrs.push(Instr::Globl("min_caml_start".to_string()));
+    instrs.push(Instr::Label("min_caml_start".to_string()));
+    instrs.push(Instr::Globl("_min_caml_start".to_string()));
+    instrs.push(Instr::Label("_min_caml_start".to_string()));
+    let saved_regs = vec!["%rax", "%rbx", "%rcx", "%rdx", "%rsi", "%rdi", "%rbp"];
+    for reg in saved_regs.iter().cloned() {
+        instrs.push(Instr::PushQ(reg.try_into()?))
+    }
+    /*
+          Printf.fprintf oc "\tmovl\t32(%%esp),%s\n" reg_sp;
+      Printf.fprintf oc "\tmovl\t36(%%esp),%s\n" regs.(0);
+      Printf.fprintf oc "\tmovl\t%s,%s\n" regs.(0) reg_hp;
+    */
+    g(
+        &mut instrs,
+        &mut StackState::new(),
+        Dest::NonTail(saved_regs[0].to_string()),
+        e,
+    )?;
+    for reg in saved_regs.into_iter().rev() {
+        instrs.push(Instr::PopQ(reg.try_into()?))
+    }
+    instrs.push(Instr::Ret);
+    Ok(instrs)
 }
 /*
 let f oc (Prog(data, fundefs, e)) =
