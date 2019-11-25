@@ -3,12 +3,12 @@ use std::convert::TryInto;
 
 use id;
 use id::IdGen;
-use syntax::Type;
+use syntax::IntBin;
 use x86::asm;
-use x86::asm::{Asm, Exp, Fundef, IdOrImm, Prog, REGS, REG_SP};
+use x86::asm::{fregs, Asm, CompBin, Exp, Fundef, IdOrImm, Prog, REGS, REG_SP};
 use x86::error::Error;
-use x86::instr::Instr;
 use x86::instr::Instr::MovRR;
+use x86::instr::{cmpq, movq, subq, Instr, R64};
 /*
 open Asm
 
@@ -20,6 +20,7 @@ let stackset = ref S.empty (* すでにSaveされた変数の集合 (caml2html: 
 
  */
 
+#[derive(Debug, Clone)]
 struct StackState {
     stack_set: HashSet<String>,
     stack_map: Vec<String>,
@@ -71,8 +72,7 @@ fn shuffle(sw: &str, xys: &[(String, String)]) -> Vec<(String, String)> {
         .filter(|(ref x, ref y)| x != y)
         .cloned()
         .collect();
-
-    panic!();
+    crate::util::assign(&xys, sw)
 }
 /*
 let rec shuffle sw xys =
@@ -100,14 +100,15 @@ enum Dest {
 fn g(
     output: &mut Vec<Instr>,
     stack_state: &mut StackState,
+    id_gen: &mut IdGen,
     dest: Dest,
     asm: Asm,
 ) -> Result<(), Error> {
     match asm {
-        Asm::Ans(exp) => g_exp(output, stack_state, dest, exp),
+        Asm::Ans(exp) => g_exp(output, stack_state, id_gen, dest, exp),
         Asm::Let(x, t, exp, e) => {
-            g_exp(output, stack_state, Dest::NonTail(x), exp)?;
-            g(output, stack_state, dest, *e)?;
+            g_exp(output, stack_state, id_gen, Dest::NonTail(x), exp)?;
+            g(output, stack_state, id_gen, dest, *e)?;
             Ok(())
         }
     }
@@ -122,12 +123,57 @@ let rec g oc = function (* 命令列のアセンブリ生成 (caml2html: emit_g)
 fn g_exp(
     output: &mut Vec<Instr>,
     stack_state: &mut StackState,
+    id_gen: &mut IdGen,
     dest: Dest,
     exp: Exp,
 ) -> Result<(), Error> {
     use self::Dest::{NonTail, Tail};
     match (dest, exp) {
         (NonTail(x), Exp::Set(i)) => output.push(Instr::MovIR(i, x.try_into()?)),
+        (NonTail(x), Exp::Mov(y)) => {
+            if x != y {
+                output.push(movq(IdOrImm::V(y), x)?);
+            }
+        }
+        /*
+          | NonTail(x), Sub(y, z') ->
+              if V(x) = z' then
+                (Printf.fprintf oc "\tsubl\t%s, %s\n" y x;
+                 Printf.fprintf oc "\tnegl\t%s\n" x)
+              else
+                (if x <> y then Printf.fprintf oc "\tmovl\t%s, %s\n" y x;
+                 Printf.fprintf oc "\tsubl\t%s, %s\n" (pp_id_or_imm z') x)
+        */
+        (NonTail(x), Exp::IntOp(IntBin::Sub, y, z_p)) => {
+            if IdOrImm::V(x.clone()) == z_p {
+                let xreg: R64 = x.try_into()?;
+                output.push(Instr::SubRR(y.try_into()?, xreg));
+                output.push(Instr::NegQ(xreg));
+            } else {
+                let xreg = x.clone().try_into()?;
+                if x != y {
+                    output.push(Instr::MovRR(y.try_into()?, xreg));
+                }
+                output.push(subq(z_p, x)?);
+            }
+        }
+        /*
+          | Tail, CallDir(Id.L(x), ys, zs) -> (* 末尾呼び出し *)
+              g'_args oc [] ys zs;
+              Printf.fprintf oc "\tjmp\t%s\n" x;
+        */
+        (Tail, Exp::CallDir(id::L(x), ys, zs)) => {
+            // tail call
+            g_exp_args(
+                output,
+                stack_state,
+                id_gen,
+                None,
+                ys.into_vec(),
+                zs.into_vec(),
+            )?;
+            output.push(Instr::Jmp(x));
+        }
         /*
                   | NonTail(a), CallDir(Id.L(x), ys, zs) ->
               g'_args oc [] ys zs;
@@ -135,16 +181,13 @@ fn g_exp(
               if ss > 0 then Printf.fprintf oc "\taddl\t$%d, %s\n" ss reg_sp;
               Printf.fprintf oc "\tcall\t%s\n" x;
               if ss > 0 then Printf.fprintf oc "\tsubl\t$%d, %s\n" ss reg_sp;
-              if List.mem a allregs && a <> regs.(0) then
-                Printf.fprintf oc "\tmovl\t%s, %s\n" regs.(0) a
-              else if List.mem a allfregs && a <> fregs.(0) then
-                Printf.fprintf oc "\tmovsd\t%s, %s\n" fregs.(0) a
         */
         (NonTail(a), Exp::CallDir(id::L(x), ys, zs)) => {
             g_exp_args(
                 output,
                 stack_state,
-                "dummy".to_string(),
+                id_gen,
+                None,
                 ys.into_vec(),
                 zs.into_vec(),
             )?;
@@ -157,9 +200,40 @@ fn g_exp(
                 output.push(Instr::AddIR(-ss, REG_SP.try_into()?));
             }
             // TODO
+            /*
+              if List.mem a allregs && a <> regs.(0) then
+                Printf.fprintf oc "\tmovl\t%s, %s\n" regs.(0) a
+              else if List.mem a allfregs && a <> fregs.(0) then
+                Printf.fprintf oc "\tmovsd\t%s, %s\n" fregs.(0) a
+            */
             if REGS[0] != a {
                 output.push(MovRR(REGS[0].try_into()?, a.try_into()?));
             }
+        }
+        /*
+          | Tail, (Set _ | SetL _ | Mov _ | Neg _ | Add _ | Sub _ | Ld _ as exp) ->
+              g' oc (NonTail(regs.(0)), exp);
+              Printf.fprintf oc "\tret\n";
+        */
+        (Tail, Exp::Mov(src)) => {
+            let exp = Exp::Mov(src);
+            g_exp(
+                output,
+                stack_state,
+                id_gen,
+                Dest::NonTail(REGS[0].to_string()),
+                exp,
+            )?;
+            output.push(Instr::Ret);
+        }
+        (Tail, Exp::IfComp(op, x, y_p, e1, e2)) => {
+            output.push(cmpq(y_p, x)?);
+            let (if_label, else_label) = match op {
+                CompBin::Eq => ("je", "jne"),
+                CompBin::LE => ("jle", "jg"),
+                CompBin::GE => ("jge", "jl"),
+            };
+            g_exp_tail_if(output, stack_state, id_gen, *e1, *e2, if_label, else_label)?;
         }
         (dest, exp) => unimplemented!("{:?} {:?}", dest, exp),
     }
@@ -324,12 +398,21 @@ and g' oc = function (* 各命令のアセンブリ生成 (caml2html: emit_gprim
 
 fn g_exp_tail_if(
     output: &mut Vec<Instr>,
-    e1: Exp,
-    e2: Exp,
+    stack_state: &mut StackState,
+    id_gen: &mut IdGen,
+    e1: Asm,
+    e2: Asm,
     b: &str,
     bn: &str,
 ) -> Result<(), Error> {
-    panic!();
+    let stack_state_old = stack_state.clone();
+    let b_else = id_gen.gen_id(&format!("{}_else", b));
+    output.push(Instr::Branch(bn.to_string(), b_else.clone()));
+    g(output, stack_state, id_gen, Dest::Tail, e1)?;
+    output.push(Instr::Label(b_else));
+    *stack_state = stack_state_old;
+    g(output, stack_state, id_gen, Dest::Tail, e2)?;
+    Ok(())
 }
 /*
 and g'_tail_if oc e1 e2 b bn =
@@ -343,13 +426,15 @@ and g'_tail_if oc e1 e2 b bn =
 */
 fn g_exp_non_tail_if(
     output: &mut Vec<Instr>,
+    stack_state: &mut StackState,
+    id_gen: &mut IdGen,
     dest: Dest,
     e1: Exp,
     e2: Exp,
     b: &str,
     bn: &str,
 ) -> Result<(), Error> {
-    panic!();
+    unimplemented!("e1={:?}, e2={:?}, b={}, bn={}", e1, e2, b, bn);
 }
 /*
 and g'_non_tail_if oc dest e1 e2 b bn =
@@ -370,11 +455,26 @@ and g'_non_tail_if oc dest e1 e2 b bn =
 fn g_exp_args(
     output: &mut Vec<Instr>,
     stack_state: &mut StackState,
-    x_reg_cl: String,
+    id_gen: &mut IdGen,
+    x_reg_cl: Option<String>,
     ys: Vec<String>,
     zs: Vec<String>,
 ) -> Result<(), Error> {
-    // unimplemented!("x_reg_cl = {}, ys = {:?}, zs = {:?}", x_reg_cl, ys, zs);
+    assert!(ys.len() <= REGS.len() - if x_reg_cl.is_some() { 1 } else { 0 });
+    assert!(zs.len() <= fregs().len());
+    let sw = "%r15"; // TODO register to instr
+    let mut swaps = vec![];
+    for i in 0..ys.len() {
+        swaps.push((ys[i].clone(), REGS[i].to_string()));
+        // TODO handle x_reg_cl
+    }
+    // shuffle
+    let swaps = shuffle(&sw, &swaps);
+    for i in 0..swaps.len() {
+        let (x, y) = swaps[i].clone();
+        output.push(Instr::MovRR(x.try_into()?, y.try_into()?));
+    }
+    // TODO floating point numbers
     Ok(())
 }
 /*
@@ -412,7 +512,7 @@ fn h(
     id_gen: &mut IdGen,
 ) -> Result<(), Error> {
     output.push(Instr::Label(x));
-    g(output, &mut StackState::new(), Dest::Tail, e)
+    g(output, &mut StackState::new(), id_gen, Dest::Tail, e)
 }
 /*
 let h oc { name = Id.L(x); args = _; fargs = _; body = e; ret = _ } =
@@ -448,6 +548,7 @@ pub fn f(Prog(data, fundefs, e): Prog, id_gen: &mut IdGen) -> Result<Vec<Instr>,
     g(
         &mut instrs,
         &mut StackState::new(),
+        id_gen,
         Dest::NonTail(saved_regs[0].to_string()),
         e,
     )?;
