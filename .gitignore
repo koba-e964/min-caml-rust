@@ -1,2 +1,5 @@
 target
 *.asm
+*.ans
+*.out
+*.x
