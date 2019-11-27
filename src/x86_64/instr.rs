@@ -2,8 +2,8 @@ use std::convert::{TryFrom, TryInto};
 use std::fmt;
 use std::fmt::{Display, Formatter};
 
-use x86::asm::IdOrImm;
-use x86::error::{Error, RegisterNameError};
+use x86_64::asm::IdOrImm;
+use x86_64::error::{Error, RegisterNameError};
 
 const GPRS: [&str; 16] = [
     "%rax", "%rcx", "%rdx", "%rbx", "%rsp", "%rbp", "%rsi", "%rdi", "%r8", "%r9", "%r10", "%r11",
@@ -165,7 +165,7 @@ pub fn cmpq(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use x86::error::Error;
+    use x86_64::error::Error;
 
     #[test]
     fn movrr_display() -> Result<(), Error> {

@@ -7,8 +7,8 @@ use std::collections::HashMap;
 use syntax;
 use syntax::IntBin;
 use syntax::Type;
-use x86::asm;
-use x86::asm::{Asm, CompBin, Exp, FCompBin, Fundef, IdOrImm, Prog};
+use x86_64::asm;
+use x86_64::asm::{Asm, CompBin, Exp, FCompBin, Fundef, IdOrImm, Prog};
 
 /*
  * S: State
@@ -139,7 +139,7 @@ fn g(
             },
             e2,
         ) => {
-            use x86::asm::REG_HP;
+            use x86_64::asm::REG_HP;
             let mut copied_env = env.clone();
             copied_env.insert(x.clone(), t.clone());
             let e2p = g(data, &copied_env, *e2, id_gen);
@@ -218,7 +218,7 @@ fn g(
             Asm::Ans(Exp::CallDir(id::L(x), intargs, floatargs))
         }
         Closure::Tuple(xs) => {
-            use x86::asm::{align, REG_HP};
+            use x86_64::asm::{align, REG_HP};
             let y = id_gen.gen_id("t");
             let xs_with_type = xs
                 .iter()
@@ -331,7 +331,7 @@ fn h(
         &zts,
         (4, inner_e),
         |_, z, offset, load| {
-            ::x86::asm::fletd(z, Exp::LdDF(x.clone(), IdOrImm::C(offset), 1), load)
+            ::x86_64::asm::fletd(z, Exp::LdDF(x.clone(), IdOrImm::C(offset), 1), load)
         },
         |_, z, t, offset, load| {
             Asm::Let(
@@ -374,7 +374,7 @@ pub fn f(closure::Prog(fundefs, e): closure::Prog, id_gen: &mut IdGen) -> Prog {
 #[cfg(test)]
 mod tests {
     use closure::*;
-    use x86::virtual_asm::*;
+    use x86_64::virtual_asm::*;
     #[test]
     fn test_comparison() {
         use std::collections::HashMap;

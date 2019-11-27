@@ -17,4 +17,4 @@ pub mod k_normal;
 pub mod parser;
 pub mod syntax;
 pub mod typing;
-pub mod x86;
+pub mod x86_64;

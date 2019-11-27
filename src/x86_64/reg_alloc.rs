@@ -1,8 +1,8 @@
 use id;
 use id::IdGen;
 use syntax::{FloatBin, IntBin, Type};
-use x86::asm;
-use x86::asm::{Asm, Exp, Fundef, IdOrImm, Prog};
+use x86_64::asm;
+use x86_64::asm::{Asm, Exp, Fundef, IdOrImm, Prog};
 
 use std::collections::{HashMap, HashSet};
 
@@ -86,7 +86,7 @@ fn g(
     asm: Asm,
     id_gen: &mut IdGen,
 ) -> (Asm, RegEnv) {
-    use x86::asm::Asm::{Ans, Let};
+    use x86_64::asm::Asm::{Ans, Let};
     match asm {
         Ans(exp) => g_exp_with_restore(dest, cont, regenv, exp, id_gen),
         Let(x, t, exp, e) => {
@@ -390,7 +390,7 @@ fn target_args(src: &str, all: &[String], ys: &[String]) -> Vec<String> {
 /// The author hasn't understood the meaning of this function.
 /// TODO understand this
 /// "register sourcing" (?) as opposed to register targeting
-/// （x86の2オペランド命令のためのregister coalescing） *)
+/// （x86_64の2オペランド命令のためのregister coalescing） *)
 fn source(t: &Type, asm: &Asm) -> Vec<String> {
     match asm {
         Asm::Ans(ref exp) => source_exp(t, exp),

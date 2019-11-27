@@ -15,7 +15,7 @@ pub enum Asm {
     Let(String, Type, Exp, Box<Asm>),
 }
 
-// We have GE because x86 instructions are not symmetric
+// We have GE because x86_64 instructions are not symmetric
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CompBin {
     Eq,

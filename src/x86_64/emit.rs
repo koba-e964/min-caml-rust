@@ -4,11 +4,11 @@ use std::convert::TryInto;
 use id;
 use id::IdGen;
 use syntax::IntBin;
-use x86::asm;
-use x86::asm::{fregs, Asm, CompBin, Exp, Fundef, IdOrImm, Prog, REGS, REG_SP};
-use x86::error::Error;
-use x86::instr::Instr::MovRR;
-use x86::instr::{cmpq, movq, subq, Instr, R64};
+use x86_64::asm;
+use x86_64::asm::{fregs, Asm, CompBin, Exp, Fundef, IdOrImm, Prog, REGS, REG_SP};
+use x86_64::error::Error;
+use x86_64::instr::Instr::MovRR;
+use x86_64::instr::{cmpq, movq, subq, Instr, R64};
 /*
 open Asm
 
