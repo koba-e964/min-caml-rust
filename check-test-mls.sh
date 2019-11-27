@@ -1,7 +1,7 @@
 success=0
 total=0
 
-ARCH=${ARCH:-x86}
+ARCH=${ARCH:-x86_64}
 
 NECESSARY_FILES="assets/stub.c assets/${ARCH}/libmincaml.S"
 
