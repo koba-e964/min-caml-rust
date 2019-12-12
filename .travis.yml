@@ -1,4 +1,7 @@
 language: rust
+env:
+  global:
+    - OCAML_VERSION=4.02
 matrix:
   include:
     - rust: stable
@@ -9,7 +12,9 @@ matrix:
       env: RUST_CHANNEL=nightly
   allow_failures:
     - rust: nightly
+  fast_finish: true
 install:
+  - bash -ex .travis-ocaml.sh
   - cargo install cargo-bloat
   - rustup component add clippy rustfmt
   - if [ $RUST_CHANNEL == "nightly" ]; then
