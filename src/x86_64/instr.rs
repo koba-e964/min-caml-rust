@@ -79,6 +79,7 @@ pub enum Instr {
     Label(String),
     BAlign(i32),
     Globl(String),
+    Section(String),
     // instructions
     MovRR(R64, R64),
     MovIR(i32, R64),
@@ -103,6 +104,7 @@ impl Display for Instr {
             Instr::Label(s) => writeln!(f, "{}:", s)?,
             Instr::BAlign(align) => writeln!(f, ".balign\t{}", align)?,
             Instr::Globl(s) => writeln!(f, ".globl\t{}", s)?,
+            Instr::Section(name) => writeln!(f, "{}", name)?,
             Instr::MovRR(src, dst) => writeln!(f, "    movq {}, {}", src, dst)?,
             Instr::MovIR(src, dst) => writeln!(f, "    movq ${}, {}", src, dst)?,
             Instr::MovMR(src, dst) => writeln!(f, "    movq {}, {}", src, dst)?,

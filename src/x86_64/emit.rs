@@ -524,11 +524,12 @@ let h oc { name = Id.L(x); args = _; fargs = _; body = e; ret = _ } =
 
 pub fn f(Prog(data, fundefs, e): Prog, id_gen: &mut IdGen) -> Result<Vec<Instr>, Error> {
     let mut instrs = Vec::new();
-    instrs.push(Instr::Label(".data".to_string()));
+    instrs.push(Instr::Section(".data".to_string()));
     instrs.push(Instr::BAlign(8));
     for (id::L(x), d) in data.into_vec() {
         // TODO
     }
+    instrs.push(Instr::Section(".text".to_string()));
     for fundef in fundefs.into_vec() {
         h(&mut instrs, fundef, id_gen)?;
     }
