@@ -8,8 +8,8 @@ NECESSARY_FILES="assets/stub.c assets/${ARCH}/libmincaml.S"
 if cargo build --release; then
   for i in test/*.ml; do
     echo "---- ${i} ----"
-    if cargo run --release -q -- ${i} ${i}.asm >/dev/null 2>&1; then
-      if cc ${i}.asm ${NECESSARY_FILES} -o ${i}.x; then
+    if cargo run --release -q -- ${i} ${i}.S >/dev/null 2>&1; then
+      if cc ${i}.S ${NECESSARY_FILES} -o ${i}.x; then
         if ./${i}.x >${i}.out; then
           # testrun ml
           ocaml ${i} >${i}.ans
