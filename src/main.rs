@@ -5,7 +5,7 @@ extern crate nom;
 
 use min_caml_rust::syntax::Type;
 use min_caml_rust::{
-    alpha, assoc, beta, closure, const_fold, elim, id, inline, k_normal, parser, typing, x86,
+    alpha, assoc, beta, closure, const_fold, elim, id, inline, k_normal, parser, typing, x86_64,
 };
 use nom::Err;
 use std::collections::HashMap;
@@ -122,17 +122,23 @@ fn run(program: &[u8], output_path: &Path) -> Result<(), std::io::Error> {
     }
     let closure = closure::f(e);
     println!("closure-trans = {}", closure);
-    let virtual_asm = x86::virtual_asm::f(closure, &mut id_gen);
+    let virtual_asm = x86_64::virtual_asm::f(closure, &mut id_gen);
     println!("virtual_asm = {}", virtual_asm);
     println!();
-    let simm = x86::simm::f(virtual_asm);
+    let simm = x86_64::simm::f(virtual_asm);
     println!("simm = {}", simm);
-    let reg_alloc = x86::reg_alloc::f(simm, &mut id_gen);
+    let reg_alloc = x86_64::reg_alloc::f(simm, &mut id_gen);
     println!("reg_alloc = {}", reg_alloc);
     println!();
+    let emitted = x86_64::emit::f(reg_alloc, &mut id_gen).unwrap();
+    for row in &emitted {
+        print!("{}", row);
+    }
 
     // Write to file
     let mut outfile = BufWriter::new(File::create(output_path)?);
-    write!(outfile, "{}\n", reg_alloc)?;
+    for row in &emitted {
+        write!(outfile, "{}", row)?;
+    }
     Ok(())
 }

@@ -209,7 +209,7 @@ impl fmt::Display for Prog {
     }
 }
 
-/// Used in x86/virtual_asm.rs
+/// Used in x86_64/virtual_asm.rs
 pub fn fv(e: &Closure) -> HashSet<String> {
     use self::Closure::*;
     macro_rules! invoke {

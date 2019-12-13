@@ -4,7 +4,7 @@ extern crate lazy_static;
 extern crate ordered_float;
 
 #[macro_use]
-mod util;
+pub mod util;
 pub mod alpha;
 pub mod assoc;
 pub mod beta;
@@ -17,4 +17,4 @@ pub mod k_normal;
 pub mod parser;
 pub mod syntax;
 pub mod typing;
-pub mod x86;
+pub mod x86_64;

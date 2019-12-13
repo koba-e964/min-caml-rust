@@ -1,8 +1,8 @@
 use id;
 use id::IdGen;
 use syntax::{FloatBin, IntBin, Type};
-use x86::asm;
-use x86::asm::{Asm, Exp, Fundef, IdOrImm, Prog};
+use x86_64::asm;
+use x86_64::asm::{Asm, Exp, Fundef, IdOrImm, Prog};
 
 use std::collections::{HashMap, HashSet};
 
@@ -86,7 +86,7 @@ fn g(
     asm: Asm,
     id_gen: &mut IdGen,
 ) -> (Asm, RegEnv) {
-    use x86::asm::Asm::{Ans, Let};
+    use x86_64::asm::Asm::{Ans, Let};
     match asm {
         Ans(exp) => g_exp_with_restore(dest, cont, regenv, exp, id_gen),
         Let(x, t, exp, e) => {
@@ -390,7 +390,7 @@ fn target_args(src: &str, all: &[String], ys: &[String]) -> Vec<String> {
 /// The author hasn't understood the meaning of this function.
 /// TODO understand this
 /// "register sourcing" (?) as opposed to register targeting
-/// （x86の2オペランド命令のためのregister coalescing） *)
+/// （x86_64の2オペランド命令のためのregister coalescing） *)
 fn source(t: &Type, asm: &Asm) -> Vec<String> {
     match asm {
         Asm::Ans(ref exp) => source_exp(t, exp),
@@ -532,10 +532,10 @@ mod tests {
     use super::*;
     #[test]
     fn test_find() {
-        let regenv = vec![("aa".to_string(), "%eax".to_string())]
+        let regenv = vec![("aa".to_string(), "%rax".to_string())]
             .into_iter()
             .collect();
-        assert_eq!(find("aa", &Type::Int, &regenv), Ok("%eax".to_string()));
+        assert_eq!(find("aa", &Type::Int, &regenv), Ok("%rax".to_string()));
         assert_eq!(
             find("bb", &Type::Int, &regenv),
             Err(NoReg("bb".to_string(), Type::Int))
@@ -543,12 +543,12 @@ mod tests {
     }
     #[test]
     fn test_find_p() {
-        let regenv = vec![("aa".to_string(), "%eax".to_string())]
+        let regenv = vec![("aa".to_string(), "%rax".to_string())]
             .into_iter()
             .collect();
         assert_eq!(
             find_p(&IdOrImm::V("aa".to_string()), &regenv),
-            Ok(IdOrImm::V("%eax".to_string()))
+            Ok(IdOrImm::V("%rax".to_string()))
         );
         assert_eq!(
             find_p(&IdOrImm::V("bb".to_string()), &regenv),
@@ -561,24 +561,24 @@ mod tests {
         let regenv = HashMap::new();
         let x = "a".to_string();
         let t = Type::Int;
-        let preference = ["%eax".to_string()];
+        let preference = ["%rax".to_string()];
         assert_eq!(
             alloc(cont, &regenv, x, t, &preference),
-            AllocResult::Alloc("%eax".to_string()),
+            AllocResult::Alloc("%rax".to_string()),
         )
     }
     #[test]
     fn test_alloc_not_in_preference() {
         let cont = Asm::Ans(Exp::Mov("b".to_string()));
-        let regenv = vec![("b".to_string(), "%eax".to_string())]
+        let regenv = vec![("b".to_string(), "%rax".to_string())]
             .into_iter()
             .collect();
         let x = "a".to_string();
         let t = Type::Int;
-        let preference = ["%eax".to_string()];
+        let preference = ["%rax".to_string()];
         assert_eq!(
             alloc(cont, &regenv, x, t, &preference),
-            AllocResult::Alloc("%ebx".to_string()),
+            AllocResult::Alloc("%rbx".to_string()),
         )
     }
 }

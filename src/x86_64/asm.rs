@@ -15,7 +15,7 @@ pub enum Asm {
     Let(String, Type, Exp, Box<Asm>),
 }
 
-// We have GE because x86 instructions are not symmetric
+// We have GE because x86_64 instructions are not symmetric
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CompBin {
     Eq,
@@ -247,7 +247,9 @@ pub fn seq(id_gen: &mut id::IdGen, e1: Exp, e2: Asm) -> Asm {
     Asm::Let(id, Type::Unit, e1, Box::new(e2))
 }
 
-const REGS: [&str; 6] = ["%eax", "%ebx", "%ecx", "%edx", "%esi", "%edi"];
+pub const REGS: [&str; 6] = ["%rax", "%rbx", "%rcx", "%rdx", "%rsi", "%rdi"];
+// TODO: fill in
+pub const FREGS: [&str; 1] = ["%xmm0"];
 
 pub fn regs() -> Vec<String> {
     let mut res = vec!["".to_string(); 6];
@@ -270,7 +272,7 @@ pub fn reg_cl() -> &'static str {
     REGS[REGS.len() - 1]
 }
 
-pub const REG_SP: &str = "%ebp";
+pub const REG_SP: &str = "%rbp";
 pub const REG_HP: &str = "min_caml_hp";
 
 pub fn is_reg(x: &str) -> bool {
