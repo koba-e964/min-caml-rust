@@ -5,10 +5,10 @@ use id;
 use id::IdGen;
 use syntax::IntBin;
 use x86_64::asm;
-use x86_64::asm::{fregs, Asm, CompBin, Exp, Fundef, IdOrImm, Prog, REGS, REG_SP};
+use x86_64::asm::{fregs, Asm, CompBin, Exp, Fundef, IdOrImm, Prog, FREGS, REGS, REG_SP};
 use x86_64::error::Error;
 use x86_64::instr::Instr::MovRR;
-use x86_64::instr::{cmpq, movq, subq, Instr, R64};
+use x86_64::instr::{addq, cmpq, loadmem, movq, savemem, subq, Instr, R64};
 /*
 open Asm
 
@@ -136,6 +136,24 @@ fn g_exp(
             }
         }
         /*
+          | NonTail(x), Add(y, z') ->
+              if V(x) = z' then
+                Printf.fprintf oc "\taddl\t%s, %s\n" y x
+              else
+                (if x <> y then Printf.fprintf oc "\tmovl\t%s, %s\n" y x;
+                 Printf.fprintf oc "\taddl\t%s, %s\n" (pp_id_or_imm z') x)
+        */
+        (NonTail(x), Exp::IntOp(IntBin::Add, y, z_p)) => {
+            if IdOrImm::V(x.clone()) == z_p {
+                output.push(addq(y, x)?);
+            } else {
+                if x != y {
+                    output.push(movq(y, x.clone())?);
+                    output.push(addq(z_p, x)?);
+                }
+            }
+        }
+        /*
           | NonTail(x), Sub(y, z') ->
               if V(x) = z' then
                 (Printf.fprintf oc "\tsubl\t%s, %s\n" y x;
@@ -155,6 +173,45 @@ fn g_exp(
                     output.push(Instr::MovRR(y.try_into()?, xreg));
                 }
                 output.push(subq(z_p, x)?);
+            }
+        }
+        /*
+          (* 退避の仮想命令の実装 (caml2html: emit_save) *)
+          | NonTail(_), Save(x, y) when List.mem x allregs && not (S.mem y !stackset) ->
+              save y;
+              Printf.fprintf oc "\tmovl\t%s, %d(%s)\n" x (offset y) reg_sp
+          | NonTail(_), Save(x, y) when List.mem x allfregs && not (S.mem y !stackset) ->
+              savef y;
+              Printf.fprintf oc "\tmovsd\t%s, %d(%s)\n" x (offset y) reg_sp
+          | NonTail(_), Save(x, y) -> assert (S.mem y !stackset); ()
+        */
+        (NonTail(_), Exp::Save(x, y)) => {
+            if REGS.contains(&(x.as_ref())) && stack_state.offset(&y).is_none() {
+                stack_state.save(&y);
+                output.push(savemem(x, REG_SP, stack_state.offset(&y).unwrap())? );
+            } else
+            if FREGS.contains(&(x.as_ref())) && stack_state.offset(&y).is_none() {
+                unimplemented!();
+            }else {
+                assert!(stack_state.offset(&y).is_some());
+            }
+        }
+        /*
+          (* 復帰の仮想命令の実装 (caml2html: emit_restore) *)
+          | NonTail(x), Restore(y) when List.mem x allregs ->
+              Printf.fprintf oc "\tmovl\t%d(%s), %s\n" (offset y) reg_sp x
+          | NonTail(x), Restore(y) ->
+              assert (List.mem x allfregs);
+              Printf.fprintf oc "\tmovsd\t%d(%s), %s\n" (offset y) reg_sp x
+        */
+        (NonTail(x), Exp::Restore(y)) => {
+            if REGS.contains(&x.as_ref()) {
+                output.push(loadmem(REG_SP, stack_state.offset(&y).unwrap(), x)?);
+            } else
+            if FREGS.contains(&x.as_ref()) {
+                unimplemented!();
+            } else {
+                unreachable!();
             }
         }
         /*
@@ -215,8 +272,21 @@ fn g_exp(
               g' oc (NonTail(regs.(0)), exp);
               Printf.fprintf oc "\tret\n";
         */
+        // Because we cannot juxtapose patterns and bind them to a different name,
+        // we just duplicate patterns.
         (Tail, Exp::Mov(src)) => {
             let exp = Exp::Mov(src);
+            g_exp(
+                output,
+                stack_state,
+                id_gen,
+                Dest::NonTail(REGS[0].to_string()),
+                exp,
+            )?;
+            output.push(Instr::Ret);
+        }
+        (Tail, Exp::IntOp(op, x, y_p)) => {
+            let exp = Exp::IntOp(op, x, y_p);
             g_exp(
                 output,
                 stack_state,
@@ -546,6 +616,8 @@ pub fn f(Prog(data, fundefs, e): Prog, id_gen: &mut IdGen) -> Result<Vec<Instr>,
       Printf.fprintf oc "\tmovl\t36(%%esp),%s\n" regs.(0);
       Printf.fprintf oc "\tmovl\t%s,%s\n" regs.(0) reg_hp;
     */
+    instrs.push(movq("%rdi".to_string(), REG_SP)?); // %rdi = sp
+                                                    // TODO: %rsi = hp
     g(
         &mut instrs,
         &mut StackState::new(),

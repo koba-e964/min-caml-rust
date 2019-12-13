@@ -248,6 +248,8 @@ pub fn seq(id_gen: &mut id::IdGen, e1: Exp, e2: Asm) -> Asm {
 }
 
 pub const REGS: [&str; 6] = ["%rax", "%rbx", "%rcx", "%rdx", "%rsi", "%rdi"];
+// TODO: fill in
+pub const FREGS: [&str; 1] = ["%xmm0"];
 
 pub fn regs() -> Vec<String> {
     let mut res = vec!["".to_string(); 6];
@@ -270,7 +272,7 @@ pub fn reg_cl() -> &'static str {
     REGS[REGS.len() - 1]
 }
 
-pub const REG_SP: &str = "%ebp";
+pub const REG_SP: &str = "%rbp";
 pub const REG_HP: &str = "min_caml_hp";
 
 pub fn is_reg(x: &str) -> bool {

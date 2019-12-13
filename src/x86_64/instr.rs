@@ -55,6 +55,13 @@ impl TryFrom<IdOrImm> for RI64 {
     }
 }
 
+impl TryFrom<String> for RI64 {
+    type Error = RegisterNameError;
+    fn try_from(x: String) -> Result<Self, Self::Error> {
+        Ok(RI64::R64(x.try_into()?))
+    }
+}
+
 impl Display for RI64 {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
@@ -64,8 +71,11 @@ impl Display for RI64 {
     }
 }
 
+// displacement
+pub type Disp = i32;
+
 #[derive(Debug, Clone, Copy)]
-pub struct M32(pub R64, pub i32);
+pub struct M32(pub R64, pub Disp);
 
 impl Display for M32 {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
@@ -84,6 +94,7 @@ pub enum Instr {
     MovRR(R64, R64),
     MovIR(i32, R64),
     MovMR(M32, R64),
+    MovRM(R64, M32),
     Ret,
     PushQ(R64),
     PopQ(R64),
@@ -108,6 +119,7 @@ impl Display for Instr {
             Instr::MovRR(src, dst) => writeln!(f, "    movq {}, {}", src, dst)?,
             Instr::MovIR(src, dst) => writeln!(f, "    movq ${}, {}", src, dst)?,
             Instr::MovMR(src, dst) => writeln!(f, "    movq {}, {}", src, dst)?,
+            Instr::MovRM(src, dst) => writeln!(f, "    movq {}, {}", src, dst)?,
             Instr::Ret => writeln!(f, "    ret")?,
             Instr::PushQ(reg) => writeln!(f, "    pushq {}", reg)?,
             Instr::PopQ(reg) => writeln!(f, "    popq {}", reg)?,
@@ -134,6 +146,28 @@ pub fn movq(
         RI64::Imm(value) => Instr::MovIR(value, dst.try_into()?),
         RI64::R64(r) => Instr::MovRR(r, dst.try_into()?),
     };
+    Ok(instr)
+}
+
+pub fn savemem(
+    src: impl TryInto<R64, Error = RegisterNameError>,
+    dstreg: impl TryInto<R64, Error = RegisterNameError>,
+    dstoffset: Disp,
+) -> Result<Instr, RegisterNameError> {
+    let src = src.try_into()?;
+    let dstreg = dstreg.try_into()?;
+    let instr = Instr::MovRM(src, M32(dstreg, dstoffset));
+    Ok(instr)
+}
+
+pub fn loadmem(
+    srcreg: impl TryInto<R64, Error = RegisterNameError>,
+    srcoffset: Disp,
+    dst: impl TryInto<R64, Error = RegisterNameError>,
+) -> Result<Instr, RegisterNameError> {
+    let srcreg = srcreg.try_into()?;
+    let dst = dst.try_into()?;
+    let instr = Instr::MovMR(M32(srcreg, srcoffset), dst);
     Ok(instr)
 }
 
