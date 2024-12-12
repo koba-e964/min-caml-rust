@@ -1,4 +1,4 @@
-# MinCaml on Rust [![Build Status](https://travis-ci.org/koba-e964/min-caml-rust.svg?branch=master)](https://travis-ci.org/koba-e964/min-caml-rust)
+# MinCaml on Rust [![Build Status](https://github.com/koba-e964/min-caml-rust/actions/workflows/rust.yml/badge.svg?branch=master)](https://github.com/koba-e964/min-caml-rust/actions?query=branch%3Amaster)
 This project is a port of [min-caml](https://github.com/esumii/min-caml) from OCaml to Rust.
 
 
@@ -7,7 +7,7 @@ This project is a port of [min-caml](https://github.com/esumii/min-caml) from OC
 We manage the progress of this project on the [wiki](https://github.com/koba-e964/min-caml-rust/wiki) of this project.
 
 ## Dependencies
-* `cargo` (>= 1.26.0, [https://crates.io/](https://crates.io/))
+* `cargo` (>= 1.74.1, [https://crates.io/](https://crates.io/))
 
 ## How to run
 ```
