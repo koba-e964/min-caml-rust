@@ -1,217 +1,353 @@
-extern crate std;
 use crate::id::IdGen;
 use crate::syntax::*;
-use nom::types::CompleteByteSlice;
-use nom::{digit, IResult};
+use nom::branch::alt;
+use nom::bytes::complete::{tag, take_while};
+use nom::character::complete::{char, digit1, multispace0, multispace1};
+use nom::combinator::{map, recognize, value, verify};
+use nom::multi::{many0, many1};
+use nom::sequence::{delimited, preceded, separated_pair, tuple};
+use nom::IResult;
 use ordered_float::OrderedFloat;
 
-pub fn parse(x: &[u8]) -> IResult<CompleteByteSlice, Syntax> {
-    exp(CompleteByteSlice(x))
+pub fn parse(x: &[u8]) -> IResult<&[u8], Syntax> {
+    delimited(multispace0, exp, multispace0)(x)
 }
 
-named!(simple_exp_no_index<CompleteByteSlice, Syntax>, alt!(
-    ws!(do_parse!(char!('(') >> res: exp >> char!(')') >> (res))) |
-    ws!(do_parse!(char!('(') >> char!(')') >> (Syntax::Unit))) |
-    ws!(do_parse!(b: bool_lit >> (Syntax::Bool(b)))) |
-    ws!(do_parse!(f: float_lit >> (Syntax::Float(OrderedFloat::from(f))))) |
-    ws!(do_parse!(i: int_lit >> (Syntax::Int(i)))) |
-    ws!(do_parse!(id: ident >> (Syntax::Var(id))))
-));
+fn simple_exp_no_index(i: &[u8]) -> IResult<&[u8], Syntax> {
+    alt((
+        delimited(
+            multispace0,
+            delimited(char('('), exp, char(')')),
+            multispace0,
+        ),
+        value(
+            Syntax::Unit,
+            delimited(
+                multispace0,
+                delimited(char('('), multispace0, char(')')),
+                multispace0,
+            ),
+        ),
+        map(delimited(multispace0, bool_lit, multispace0), Syntax::Bool),
+        map(delimited(multispace0, float_lit, multispace0), |f| {
+            Syntax::Float(OrderedFloat::from(f))
+        }),
+        map(delimited(multispace0, int_lit, multispace0), Syntax::Int),
+        map(delimited(multispace0, ident, multispace0), Syntax::Var),
+    ))(i)
+}
 
-named!(simple_exp<CompleteByteSlice, Syntax>,
-       ws!(do_parse!(
-           init: simple_exp_no_index >>
-               res: fold_many0!(
-                   ws!(do_parse!(char!('.') >> char!('(') >> res: exp >> char!(')') >> (res))),
-                   init,
-                   |acc, index| {
-                       Syntax::Get(Box::new(acc), Box::new(index))
-                   }
-               ) >>
-               (res)
-       ))
-);
-named!(array_index_list<CompleteByteSlice, (Syntax, Vec<Syntax>)>,
-       ws!(do_parse!(
-           init: simple_exp_no_index >>
-               res: fold_many1!(
-                   ws!(do_parse!(char!('.') >> char!('(') >> res: exp >> char!(')') >> (res))),
-                   Vec::new(),
-                   |mut acc: Vec<Syntax>, index| {
-                       acc.push(index);
-                       acc
-                   }
-               ) >>
-               ((init, res))
-       ))
-);
-
-named!(exp<CompleteByteSlice, Syntax>, call!(exp_let));
-
-named!(exp_let<CompleteByteSlice, Syntax>, alt!(
-    ws!(do_parse!(
-        tag!("let") >>
-            id: ident >>
-            char!('=') >>
-            e1: exp >>
-            tag!("in") >>
-            e2: exp_let >>
-            (Syntax::Let((id, Type::Var(0) /* stub type */), Box::new(e1), Box::new(e2)))
-    )) |
-    ws!(do_parse!(
-        tag!("let") >>
-            tag!("rec") >>
-            f: fundef >>
-            tag!("in") >>
-            e: exp_let >>
-            (Syntax::LetRec(f, Box::new(e)))
-    )) |
-    ws!(do_parse!(
-        tag!("let") >>
-            char!('(') >>
-            p: pat >>
-            char!(')') >>
-            char!('=') >>
-            e1: exp >>
-            tag!("in") >>
-            e2: exp_let >>
-            (Syntax::LetTuple(p.into_boxed_slice(), Box::new(e1), Box::new(e2)))
-    )) |
-    call!(exp_semicolon)
-));
-
-named!(exp_let_after_if<CompleteByteSlice, Syntax>, alt!(
-    ws!(do_parse!(
-        tag!("let") >>
-            id: ident >>
-            char!('=') >>
-            e1: exp >>
-            tag!("in") >>
-            e2: exp_let_after_if >>
-            (Syntax::Let((id, Type::Var(0) /* stub type */), Box::new(e1), Box::new(e2)))
-    )) |
-    ws!(do_parse!(
-        tag!("let") >>
-            tag!("rec") >>
-            f: fundef >>
-            tag!("in") >>
-            e: exp_let_after_if >>
-            (Syntax::LetRec(f, Box::new(e)))
-    )) |
-    ws!(do_parse!(
-        tag!("let") >>
-            char!('(') >>
-            p: pat >>
-            char!(')') >>
-            char!('=') >>
-            e1: exp >>
-            tag!("in") >>
-            e2: exp_let_after_if >>
-            (Syntax::LetTuple(p.into_boxed_slice(), Box::new(e1), Box::new(e2)))
-    )) |
-    call!(exp_if)
-));
-
-named!(pat<CompleteByteSlice, Vec<(String, Type)> >, ws!(do_parse!(
-    init: ident >>
-        res: fold_many1!(
-            ws!(preceded!(char!(','), ident)),
-            vec![(init, Type::Var(0))],
-            |mut acc: Vec<(String, Type)>, x| {
-                acc.push((x, Type::Var(0)));
-                acc
+fn simple_exp(i: &[u8]) -> IResult<&[u8], Syntax> {
+    let indices = many0(map(
+        tuple((
+            char('.'),
+            multispace0,
+            char('('),
+            multispace0,
+            exp,
+            multispace0,
+            char(')'),
+        )),
+        |(_, _, _, _, e, _, _)| e,
+    ));
+    let inner = map(
+        separated_pair(simple_exp_no_index, multispace0, indices),
+        |(mut acc, indices)| {
+            for idx in indices {
+                acc = Syntax::Get(Box::new(acc), Box::new(idx));
             }
-        ) >>
-        (res)
-)));
+            acc
+        },
+    );
+    delimited(multispace0, inner, multispace0)(i)
+}
+fn array_index_list(i: &[u8]) -> IResult<&[u8], (Syntax, Vec<Syntax>)> {
+    let indices = many0(map(
+        tuple((
+            multispace0,
+            char('.'),
+            multispace0,
+            char('('),
+            multispace0,
+            exp,
+            multispace0,
+            char(')'),
+        )),
+        |(_, _, _, _, _, e, _, _)| e,
+    ));
+    separated_pair(simple_exp_no_index, multispace0, indices)(i)
+}
 
-named!(fundef<CompleteByteSlice, Fundef>,
-       ws!(do_parse!(
-           funname: ident >>
-               args: formal_args >>
-               char!('=') >>
-               e: exp >>
-               (Fundef {name: (funname, Type::Var(0) /* stub type */),
-                        args: args.into_boxed_slice(),
-                        body: Box::new(e)})
-       ))
-);
+#[inline(always)]
+fn exp(i: &[u8]) -> IResult<&[u8], Syntax> {
+    exp_let(i)
+}
 
-named!(formal_args<CompleteByteSlice, Vec<(String, Type)>>,
-       ws!(do_parse!(
-           x: many1!(ident) >>
-               (x.into_iter().map(|x| (x, Type::Var(0) /* stub type */)).collect())
-       ))
-);
+fn exp_let(i: &[u8]) -> IResult<&[u8], Syntax> {
+    alt((
+        map(
+            tuple((
+                tag("let"),
+                multispace1,
+                ident,
+                multispace0,
+                char('='),
+                multispace0,
+                exp,
+                multispace0,
+                tag("in"),
+                multispace0,
+                exp_let,
+            )),
+            |(_, _, id, _, _, _, e1, _, _, _, e2)| {
+                Syntax::Let(
+                    (id, Type::Var(0) /* stub type */),
+                    Box::new(e1),
+                    Box::new(e2),
+                )
+            },
+        ),
+        map(
+            tuple((
+                tag("let"),
+                multispace1,
+                tag("rec"),
+                multispace1,
+                fundef,
+                multispace0,
+                tag("in"),
+                multispace0,
+                exp_let,
+            )),
+            |(_, _, _, _, f, _, _, _, e)| Syntax::LetRec(f, Box::new(e)),
+        ),
+        map(
+            tuple((
+                tag("let"),
+                multispace0,
+                char('('),
+                multispace0,
+                pat,
+                multispace0,
+                char(')'),
+                multispace0,
+                char('='),
+                multispace0,
+                exp,
+                multispace0,
+                tag("in"),
+                multispace0,
+                exp_let,
+            )),
+            |(_, _, _, _, p, _, _, _, _, _, e1, _, _, _, e2)| {
+                Syntax::LetTuple(p.into_boxed_slice(), Box::new(e1), Box::new(e2))
+            },
+        ),
+        exp_semicolon,
+    ))(i)
+}
 
-named!(exp_semicolon<CompleteByteSlice, Syntax>, alt!(
-    ws!(do_parse!(
-        e1: exp_if >>
-            char!(';') >>
-            e2: exp >>
-            (Syntax::Let(("_dummy".to_string(), Type::Unit),
-                         Box::new(e1), Box::new(e2)))
-    )) |
-    call!(exp_if)
-));
+fn exp_let_after_if(i: &[u8]) -> IResult<&[u8], Syntax> {
+    alt((
+        map(
+            tuple((
+                tag("let"),
+                multispace1,
+                ident,
+                multispace0,
+                char('='),
+                multispace0,
+                exp,
+                multispace0,
+                tag("in"),
+                multispace0,
+                exp_let_after_if,
+            )),
+            |(_, _, id, _, _, _, e1, _, _, _, e2)| {
+                Syntax::Let(
+                    (id, Type::Var(0) /* stub type */),
+                    Box::new(e1),
+                    Box::new(e2),
+                )
+            },
+        ),
+        map(
+            tuple((
+                tag("let"),
+                multispace1,
+                tag("rec"),
+                multispace1,
+                fundef,
+                multispace0,
+                tag("in"),
+                multispace0,
+                exp_let_after_if,
+            )),
+            |(_, _, _, _, f, _, _, _, e)| Syntax::LetRec(f, Box::new(e)),
+        ),
+        map(
+            tuple((
+                tag("let"),
+                multispace0,
+                char('('),
+                multispace0,
+                pat,
+                multispace0,
+                char(')'),
+                multispace0,
+                char('='),
+                multispace0,
+                exp,
+                multispace0,
+                tag("in"),
+                multispace0,
+                exp_let_after_if,
+            )),
+            |(_, _, _, _, p, _, _, _, _, _, e1, _, _, _, e2)| {
+                Syntax::LetTuple(p.into_boxed_slice(), Box::new(e1), Box::new(e2))
+            },
+        ),
+        exp_if,
+    ))(i)
+}
 
-named!(exp_if<CompleteByteSlice, Syntax>, alt!(
-    ws!(do_parse!(
-        tag!("if") >>
-            e1: exp >>
-            tag!("then") >>
-            e2: exp >>
-            tag!("else") >>
-            e3: exp_let_after_if >>
-            (Syntax::If(Box::new(e1), Box::new(e2), Box::new(e3)))
-    )) |
-    call!(exp_assign)
-));
+fn pat(i: &[u8]) -> IResult<&[u8], Vec<(String, Type)>> {
+    map(
+        tuple((
+            ident,
+            many0(delimited(
+                tuple((multispace0, char(','), multispace0)),
+                ident,
+                multispace0,
+            )),
+        )),
+        |(init, mut res)| {
+            res.insert(0, init);
+            res.into_iter()
+                .map(|x| (x, Type::Var(0) /* stub type */))
+                .collect()
+        },
+    )(i)
+}
 
-named!(exp_assign<CompleteByteSlice, Syntax>, alt!(
-    ws!(do_parse!(
-        base_indices: array_index_list >>
-            tag!("<-") >>
-            e: exp_comma >>
-            ({
+fn fundef(i: &[u8]) -> IResult<&[u8], Fundef> {
+    let (i, funname) = ident(i)?;
+    let (i, args) = formal_args(i)?;
+    let (i, _) = delimited(multispace0, char('='), multispace0)(i)?;
+    let (i, e) = exp(i)?;
+    Ok((
+        i,
+        Fundef {
+            name: (funname, Type::Var(0) /* stub type */),
+            args: args.into_boxed_slice(),
+            body: Box::new(e),
+        },
+    ))
+}
+
+fn formal_args(i: &[u8]) -> IResult<&[u8], Vec<(String, Type)>> {
+    map(many1(preceded(multispace1, ident)), |x| {
+        x.into_iter()
+            .map(|x| (x, Type::Var(0) /* stub type */))
+            .collect()
+    })(i)
+}
+
+fn exp_semicolon(i: &[u8]) -> IResult<&[u8], Syntax> {
+    alt((
+        map(
+            tuple((exp_if, multispace0, char(';'), multispace0, exp)),
+            |(e1, _, _, _, e2)| {
+                Syntax::Let(
+                    ("_dummy".to_string(), Type::Unit),
+                    Box::new(e1),
+                    Box::new(e2),
+                )
+            },
+        ),
+        exp_if,
+    ))(i)
+}
+
+fn exp_if(i: &[u8]) -> IResult<&[u8], Syntax> {
+    alt((
+        map(
+            tuple((
+                tag("if"),
+                multispace0,
+                exp,
+                multispace0,
+                tag("then"),
+                multispace0,
+                exp,
+                multispace0,
+                tag("else"),
+                multispace0,
+                exp_let_after_if,
+            )),
+            |(_, _, e1, _, _, _, e2, _, _, _, e3)| {
+                Syntax::If(Box::new(e1), Box::new(e2), Box::new(e3))
+            },
+        ),
+        exp_assign,
+    ))(i)
+}
+
+fn exp_assign(i: &[u8]) -> IResult<&[u8], Syntax> {
+    alt((
+        map(
+            tuple((
+                array_index_list,
+                multispace0,
+                tag("<-"),
+                multispace0,
+                exp_comma,
+            )),
+            |(base_indices, _, _, _, e)| {
                 let (mut base, mut indices) = base_indices;
                 let last = indices.pop().unwrap(); // indices.len() >= 1
                 for idx in indices {
                     base = Syntax::Get(Box::new(base), Box::new(idx));
                 }
                 Syntax::Put(Box::new(base), Box::new(last), Box::new(e))
-            })
-    )) |
-    call!(exp_comma)
-));
+            },
+        ),
+        exp_comma,
+    ))(i)
+}
 
-named!(exp_comma<CompleteByteSlice, Syntax>, alt!(
-    ws!(do_parse!(
-        init: exp_comparative >>
-            res: fold_many1!(
-                ws!(preceded!(char!(','), exp_comparative)),
-                vec![init],
-                |mut acc: Vec<Syntax>, x| { acc.push(x); acc }
-            ) >>
-            (Syntax::Tuple(res.into_boxed_slice()))
-    )) |
-    call!(exp_comparative)
-));
+fn exp_comma(i: &[u8]) -> IResult<&[u8], Syntax> {
+    alt((
+        map(
+            tuple((exp_comparative, many1(preceded(char(','), exp_comparative)))),
+            |(init, res)| {
+                let mut res = res;
+                res.insert(0, init);
+                Syntax::Tuple(res.into_boxed_slice())
+            },
+        ),
+        exp_comparative,
+    ))(i)
+}
 
 macro_rules! exp_binary_operator {
     ($rule:ident, $next_rule: ident, $op: ident, $folder: expr) => {
-        named!($rule<CompleteByteSlice, Syntax>,
-               ws!(do_parse!(
-                   init: $next_rule >>
-                       res: fold_many0!(
-                           ws!(pair!($op, $next_rule)),
-                           init,
-                           $folder
-                       ) >>
-                       (res)
-               ))
-        );
-    }
+        fn $rule(i: &[u8]) -> IResult<&[u8], Syntax> {
+            map(
+                tuple((
+                    $next_rule,
+                    many0(preceded(
+                        multispace0,
+                        tuple((multispace0, $op, multispace0, $next_rule)),
+                    )),
+                )),
+                |(init, res)| {
+                    res.into_iter()
+                        .fold(init, |acc, (_, op, _, arg)| $folder(acc, (op, arg)))
+                },
+            )(i)
+        }
+    };
 }
 exp_binary_operator!(exp_comparative, exp_additive, comp_op, |acc,
                                                               (
@@ -230,14 +366,16 @@ exp_binary_operator!(exp_comparative, exp_additive, comp_op, |acc,
     }
 });
 // (operator, negated, arguments flipped)
-named!(comp_op<CompleteByteSlice, (CompBin, bool, bool)>, alt!(
-    do_parse!(tag!("<=") >> ((CompBin::LE, false, false))) |
-    do_parse!(tag!(">=") >> ((CompBin::LE, false, true))) |
-    do_parse!(tag!("<>") >> ((CompBin::Eq, true, false))) |
-    do_parse!(char!('=') >> ((CompBin::Eq, false, false))) |
-    do_parse!(char!('<') >> ((CompBin::LE, true, true))) |
-    do_parse!(char!('>') >> ((CompBin::LE, true, false)))
-));
+fn comp_op(i: &[u8]) -> IResult<&[u8], (CompBin, bool, bool)> {
+    alt((
+        value((CompBin::LE, false, false), tag("<=")),
+        value((CompBin::LE, false, true), tag(">=")),
+        value((CompBin::Eq, true, false), tag("<>")),
+        value((CompBin::Eq, false, false), char('=')),
+        value((CompBin::LE, true, true), char('<')),
+        value((CompBin::LE, true, false), char('>')),
+    ))(i)
+}
 exp_binary_operator!(
     exp_additive,
     exp_multiplicative,
@@ -247,12 +385,14 @@ exp_binary_operator!(
         Ok(op) => Syntax::IntBin(op, Box::new(acc), Box::new(arg)),
     }
 );
-named!(add_op<CompleteByteSlice, Result<IntBin, FloatBin>>, alt!(
-    do_parse!(tag!("+.") >> (Err(FloatBin::FAdd))) |
-    do_parse!(tag!("-.") >> (Err(FloatBin::FSub))) |
-    do_parse!(char!('+') >> (Ok(IntBin::Add))) |
-    do_parse!(char!('-') >> (Ok(IntBin::Sub)))
-));
+fn add_op(i: &[u8]) -> IResult<&[u8], Result<IntBin, FloatBin>> {
+    alt((
+        map(tag("+."), |_| Err(FloatBin::FAdd)),
+        map(tag("-."), |_| Err(FloatBin::FSub)),
+        map(char('+'), |_| Ok(IntBin::Add)),
+        map(char('-'), |_| Ok(IntBin::Sub)),
+    ))(i)
+}
 
 exp_binary_operator!(
     exp_multiplicative,
@@ -263,104 +403,97 @@ exp_binary_operator!(
         Ok(op) => Syntax::IntBin(op, Box::new(acc), Box::new(arg)),
     }
 );
-named!(mult_op<CompleteByteSlice, Result<IntBin, FloatBin>>, alt!(
-    do_parse!(tag!("*.") >> (Err(FloatBin::FMul))) |
-    do_parse!(tag!("/.") >> (Err(FloatBin::FDiv)))
-));
+fn mult_op(i: &[u8]) -> IResult<&[u8], Result<IntBin, FloatBin>> {
+    alt((
+        map(tag("*."), |_| Err(FloatBin::FMul)),
+        map(tag("/."), |_| Err(FloatBin::FDiv)),
+    ))(i)
+}
 
-named!(exp_unary_minus<CompleteByteSlice, Syntax>, alt!(
-    ws!(do_parse!(
-        tag!("-.") >>
-            e: exp_unary_minus >>
-            (Syntax::FNeg(Box::new(e)))
-    )) |
-    ws!(do_parse!(
-        char!('-') >>
-            e: exp_unary_minus >>
-            (match e {
+fn exp_unary_minus(i: &[u8]) -> IResult<&[u8], Syntax> {
+    alt((
+        map(
+            preceded(tuple((tag("-."), multispace0)), exp_unary_minus),
+            |e| Syntax::FNeg(Box::new(e)),
+        ),
+        map(
+            preceded(tuple((char('-'), multispace0)), exp_unary_minus),
+            |e| match e {
                 Syntax::Float(_) => Syntax::FNeg(Box::new(e)),
-                _ => Syntax::Neg(Box::new(e))
-            })
-    )) |
-    call!(exp_app)
-));
+                _ => Syntax::Neg(Box::new(e)),
+            },
+        ),
+        exp_app,
+    ))(i)
+}
 
-named!(exp_app<CompleteByteSlice, Syntax>, alt!(
-    ws!(do_parse!(char!('!') >> res: exp_app >> (Syntax::Not(Box::new(res))))) |
-    ws!(do_parse!(
-        _init: alt!(tag!("Array.create") | tag!("Array.make")) >>
-            res: many1!(ws!(simple_exp)) >>
-            ({
-                let mut res = res;
+fn exp_app(i: &[u8]) -> IResult<&[u8], Syntax> {
+    alt((
+        map(tuple((char('!'), exp_app)), |(_, e)| {
+            Syntax::Not(Box::new(e))
+        }),
+        map(
+            tuple((
+                alt((tag("Array.create"), tag("Array.make"))),
+                many1(delimited(multispace0, simple_exp, multispace0)),
+            )),
+            |(_tag, mut res)| {
                 if res.len() != 2 {
-                    panic!("The number of Array.create is wrong");
+                    panic!("The number of arguments of Array.create is wrong");
                 }
                 let res1 = res.pop().unwrap();
                 let res0 = res.pop().unwrap();
                 Syntax::Array(Box::new(res0), Box::new(res1))
-            })
-    )) |
-    ws!(do_parse!(
-        init: simple_exp >>
-            res: many1!(call!(simple_exp)) >>
-            (Syntax::App(Box::new(init), res.into_boxed_slice()))
-    )) |
-    call!(simple_exp)
-));
-
-named!(bool_lit<CompleteByteSlice, bool>, alt!(
-    ws!(do_parse!(tag!("true") >> (true))) |
-    ws!(do_parse!(tag!("false") >> (false)))
-));
-
-named!(int_lit<CompleteByteSlice, i64>, ws!(do_parse!(
-    x: digit >>
-        (convert(&x, 10))
-)));
-
-// TODO supports only digit+ . digit+
-named!(float_lit<CompleteByteSlice, f64>, alt!(
-    do_parse!(
-        fstr: recognize!(do_parse!(
-            _x: digit >>
-                _s: preceded!(char!('.'), digit)
-                >> (())) ) >>
-            (convert_to_f64(&fstr))
-    ) |
-    do_parse!(
-        fstr: recognize!(do_parse!(
-            _x: digit >>
-                _s: char!('.')
-                >> (())) ) >>
-            (convert_to_f64(&fstr))
-    )
-));
-
-named!(ident<CompleteByteSlice, String>, ws!(do_parse!(
-    s: verify!(take_till!(is_not_ident_u8), is_ident) >>
-        (String::from_utf8((&s as &[u8]).to_vec()).unwrap())
-)));
-
-fn is_not_ident_u8(x: u8) -> bool {
-    !(x.is_ascii_alphanumeric() || x == b'_')
+            },
+        ),
+        map(
+            tuple((simple_exp, many1(preceded(multispace0, simple_exp)))),
+            |(init, res)| Syntax::App(Box::new(init), res.into_boxed_slice()),
+        ),
+        simple_exp,
+    ))(i)
 }
 
-fn is_ident(x: CompleteByteSlice) -> bool {
-    is_ident_u8_slice(&x)
+fn bool_lit(i: &[u8]) -> IResult<&[u8], bool> {
+    alt((value(true, tag("true")), value(false, tag("false"))))(i)
 }
 
-fn is_ident_u8_slice(x: &[u8]) -> bool {
+fn int_lit(i: &[u8]) -> IResult<&[u8], i64> {
+    let (i, x) = digit1(i)?;
+    Ok((i, convert(x, 10)))
+}
+
+fn float_lit(i: &[u8]) -> IResult<&[u8], f64> {
+    map(
+        alt((
+            recognize(tuple((digit1, char('.'), digit1))),
+            recognize(tuple((digit1, char('.')))),
+        )),
+        convert_to_f64,
+    )(i)
+}
+
+fn ident(i: &[u8]) -> IResult<&[u8], String> {
+    let (i, s) = verify(take_while(is_ident_u8), is_ident)(i)?;
+    Ok((i, String::from_utf8(s.to_vec()).unwrap()))
+}
+
+fn is_ident_u8(x: u8) -> bool {
+    x.is_ascii_alphanumeric() || x == b'_'
+}
+
+fn is_ident(x: &[u8]) -> bool {
     let keywords = [
-        b"let",
-        &b"rec"[..],
-        &b"in"[..],
-        &b"true"[..],
-        &b"false"[..],
-        &b"if"[..],
-        &b"then"[..],
-        &b"else"[..],
-        &b"Array.create"[..],
-        &b"Array.make"[..],
+        b"let" as &[u8],
+        b"rec",
+        b"in",
+        b"true",
+        b"false",
+        b"if",
+        b"then",
+        b"else",
+        b"Array.create",
+        b"Array.make",
     ];
     if x.is_empty() || keywords.contains(&x) {
         return false;
@@ -687,29 +820,26 @@ Operator precedence:
 
 #[cfg(test)]
 mod tests {
-    use crate::parser::parse;
+    use super::*;
     use ordered_float::OrderedFloat;
     #[test]
     fn test_simple_exp() {
         use crate::syntax::Syntax::*;
-        assert_eq!(
-            parse(b" ( c)"),
-            Ok(((&[][..]).into(), Var("c".to_string())))
-        );
-        assert_eq!(parse(b"() "), Ok(((&[][..]).into(), Unit)));
-        assert_eq!(parse(b"100"), Ok(((&[][..]).into(), Int(100))));
+        assert_eq!(parse(b" ( c)"), Ok((&[] as &[u8], Var("c".to_string()))));
+        assert_eq!(parse(b"() "), Ok((&[] as &[u8], Unit)));
+        assert_eq!(parse(b"100"), Ok((&[] as &[u8], Int(100))));
         assert_eq!(
             parse(b"10.0"),
-            Ok(((&[][..]).into(), Float(OrderedFloat::from(10.0))))
+            Ok((&[] as &[u8], Float(OrderedFloat::from(10.0))))
         );
         assert_eq!(
             parse(b"1256.25"),
-            Ok(((&[][..]).into(), Float(OrderedFloat::from(1256.25))))
+            Ok((&[] as &[u8], Float(OrderedFloat::from(1256.25))))
         );
         assert_eq!(
             parse(b"a.(b)"),
             Ok((
-                (&[][..]).into(),
+                &[] as &[u8],
                 Get(
                     Box::new(Var("a".to_string())),
                     Box::new(Var("b".to_string()))
@@ -719,7 +849,7 @@ mod tests {
         assert_eq!(
             parse(b"a.(b).(c)"),
             Ok((
-                (&[][..]).into(),
+                &[] as &[u8],
                 Get(
                     Box::new(Get(
                         Box::new(Var("a".to_string())),
@@ -735,7 +865,7 @@ mod tests {
     fn test_let() {
         use crate::syntax::Syntax::{Int, Let};
         let result = parse(b"let x = 0 in 1").unwrap();
-        assert_eq!(result.0, (&[][..]).into());
+        assert_eq!(result.0, []);
         match result.1 {
             Let((id, _), e1, e2) => {
                 assert_eq!(id, "x");
@@ -751,7 +881,7 @@ mod tests {
         use crate::syntax::Fundef;
         use crate::syntax::Syntax::{App, Int, LetRec, Var};
         let result = parse(b"let rec f x = x in f 1").unwrap();
-        assert_eq!(result.0, (&[][..]).into());
+        assert_eq!(result.0, []);
         match result.1 {
             LetRec(
                 Fundef {
@@ -770,10 +900,23 @@ mod tests {
     }
 
     #[test]
+    fn test_formal_args() {
+        let result = formal_args(b" x y").unwrap();
+        assert_eq!(result.0, []);
+        assert_eq!(
+            result.1,
+            [
+                ("x".to_string(), Type::Var(0)),
+                ("y".to_string(), Type::Var(0))
+            ]
+        );
+    }
+
+    #[test]
     fn test_lettuple() {
         use crate::syntax::Syntax::{App, Int, LetTuple, Var};
         let result = parse(b"let (x, y) = make_pair 1 2 in x").unwrap();
-        assert_eq!(result.0, (&[][..]).into());
+        assert_eq!(result.0, []);
         match result.1 {
             LetTuple(_pat, e1, e2) => {
                 assert_eq!(
@@ -788,6 +931,18 @@ mod tests {
             _ => panic!(),
         }
     }
+    #[test]
+    fn test_pat() {
+        let result = pat(b"x, y").unwrap();
+        assert_eq!(result.0, []);
+        assert_eq!(
+            result.1,
+            [
+                ("x".to_string(), Type::Var(0)),
+                ("y".to_string(), Type::Var(0))
+            ]
+        );
+    }
 
     #[test]
     fn test_semicolon() {
@@ -800,7 +955,7 @@ mod tests {
         assert_eq!(
             result,
             Ok((
-                (&[][..]).into(),
+                &[] as &[u8],
                 Let(
                     dummy(),
                     Box::new(App(print_int(), Box::new([Int(0)]))),
@@ -820,7 +975,7 @@ mod tests {
         assert_eq!(
             parse(b"if f 3 then 4 else 0"),
             Ok((
-                (&[][..]).into(),
+                &[] as &[u8],
                 If(
                     Box::new(App(Box::new(Var("f".to_string())), Box::new([Int(3)]))),
                     Box::new(Int(4)),
@@ -836,7 +991,7 @@ mod tests {
         assert_eq!(
             parse(b" if f 3 then 4 else 0 "),
             Ok((
-                (&[][..]).into(),
+                &[] as &[u8],
                 If(
                     Box::new(App(Box::new(Var("f".to_string())), Box::new([Int(3)]))),
                     Box::new(Int(4)),
@@ -857,14 +1012,14 @@ mod tests {
         assert_eq!(
             parse(b"x, y, (z, w)"),
             Ok((
-                (&[][..]).into(),
+                &[] as &[u8],
                 Tuple(Box::new([x(), y(), Tuple(Box::new([z(), w()]))]))
             ))
         );
         assert_eq!(
             parse(b"x, 1 + 3"),
             Ok((
-                (&[][..]).into(),
+                &[] as &[u8],
                 Tuple(Box::new([
                     x(),
                     Syntax::IntBin(IntBin::Add, Box::new(Int(1)), Box::new(Int(3)))
@@ -880,7 +1035,7 @@ mod tests {
         assert_eq!(
             parse(b"1 < 2 + 3"),
             Ok((
-                (&[][..]).into(),
+                &[] as &[u8],
                 Syntax::Not(Box::new(Syntax::CompBin(
                     CompBin::LE,
                     Box::new(Syntax::IntBin(
@@ -896,21 +1051,21 @@ mod tests {
         assert_eq!(
             parse(b"4 <= 3"),
             Ok((
-                (&[][..]).into(),
+                &[] as &[u8],
                 Syntax::CompBin(CompBin::LE, Box::new(Int(4)), Box::new(Int(3)))
             ))
         );
         assert_eq!(
             parse(b"4 >= 3"),
             Ok((
-                (&[][..]).into(),
+                &[] as &[u8],
                 Syntax::CompBin(CompBin::LE, Box::new(Int(3)), Box::new(Int(4)))
             ))
         );
         assert_eq!(
             parse(b"4 > 3"),
             Ok((
-                (&[][..]).into(),
+                &[] as &[u8],
                 Syntax::Not(Box::new(Syntax::CompBin(
                     CompBin::LE,
                     Box::new(Int(4)),
@@ -921,14 +1076,14 @@ mod tests {
         assert_eq!(
             parse(b"4 = 3"),
             Ok((
-                (&[][..]).into(),
+                &[] as &[u8],
                 Syntax::CompBin(CompBin::Eq, Box::new(Int(4)), Box::new(Int(3)))
             ))
         );
         assert_eq!(
             parse(b"4 <> 3"),
             Ok((
-                (&[][..]).into(),
+                &[] as &[u8],
                 Syntax::Not(Box::new(Syntax::CompBin(
                     CompBin::Eq,
                     Box::new(Int(4)),
@@ -946,7 +1101,7 @@ mod tests {
         assert_eq!(
             parse(b"x *. y"),
             Ok((
-                (&[][..]).into(),
+                &[] as &[u8],
                 Syntax::FloatBin(
                     FloatBin::FMul,
                     Box::new(Var("x".to_string())),
@@ -957,7 +1112,7 @@ mod tests {
         assert_eq!(
             parse(b"x /. y *. z"),
             Ok((
-                (&[][..]).into(),
+                &[] as &[u8],
                 Syntax::FloatBin(
                     FloatBin::FMul,
                     Box::new(Syntax::FloatBin(
@@ -979,7 +1134,7 @@ mod tests {
         assert_eq!(
             parse(b"x /. y +. z"),
             Ok((
-                (&[][..]).into(),
+                &[] as &[u8],
                 Syntax::FloatBin(
                     FloatBin::FAdd,
                     Box::new(Syntax::FloatBin(
@@ -994,7 +1149,7 @@ mod tests {
         assert_eq!(
             parse(b"a -. b /. c"),
             Ok((
-                (&[][..]).into(),
+                &[] as &[u8],
                 Syntax::FloatBin(
                     FloatBin::FSub,
                     Box::new(Var("a".to_string())),
@@ -1011,19 +1166,19 @@ mod tests {
     #[test]
     fn test_unary_minus() {
         use crate::syntax::Syntax::{FNeg, Float, Int, Neg, Var};
-        assert_eq!(parse(b"-2"), Ok(((&[][..]).into(), Neg(Box::new(Int(2))))));
+        assert_eq!(parse(b"-2"), Ok((&[] as &[u8], Neg(Box::new(Int(2))))));
         assert_eq!(
             parse(b"--2"),
-            Ok(((&[][..]).into(), Neg(Box::new(Neg(Box::new(Int(2)))))))
+            Ok((&[] as &[u8], Neg(Box::new(Neg(Box::new(Int(2)))))))
         );
         assert_eq!(
             parse(b"-.x"),
-            Ok(((&[][..]).into(), FNeg(Box::new(Var("x".to_string())))))
+            Ok((&[] as &[u8], FNeg(Box::new(Var("x".to_string())))))
         );
         // - followed by float literal is ok.
         assert_eq!(
             parse(b"-2.0"),
-            Ok(((&[][..]).into(), FNeg(Box::new(Float(2.0.into())))))
+            Ok((&[] as &[u8], FNeg(Box::new(Float(2.0.into())))))
         );
     }
 
@@ -1032,7 +1187,7 @@ mod tests {
         use crate::syntax::Syntax::{Bool, Not};
         assert_eq!(
             parse(b"!!true"),
-            Ok(((&[][..]).into(), Not(Box::new(Not(Box::new(Bool(true)))))))
+            Ok((&[] as &[u8], Not(Box::new(Not(Box::new(Bool(true)))))))
         );
     }
 
@@ -1042,7 +1197,7 @@ mod tests {
         assert_eq!(
             parse(b"func 0 1"),
             Ok((
-                (&[][..]).into(),
+                &[] as &[u8],
                 App(
                     Box::new(Var("func".to_string())),
                     Box::new([Int(0), Int(1)])
@@ -1056,7 +1211,7 @@ mod tests {
         use crate::syntax::Syntax::{Array, Int};
         assert_eq!(
             parse(b"Array.create 2 3"),
-            Ok(((&[][..]).into(), Array(Box::new(Int(2)), Box::new(Int(3)))))
+            Ok((&[] as &[u8], Array(Box::new(Int(2)), Box::new(Int(3)))))
         );
     }
 }
