@@ -1,7 +1,7 @@
 extern crate std;
 
-use id::IdGen;
-use k_normal::{KFundef, KNormal};
+use crate::id::IdGen;
+use crate::k_normal::{KFundef, KNormal};
 use std::collections::HashMap;
 
 pub fn g(env: &HashMap<String, String>, e: KNormal, id_gen: &mut IdGen) -> KNormal {
@@ -99,8 +99,8 @@ mod tests {
     #[test]
     fn test_extarray() {
         use super::f;
-        use id::IdGen;
-        use k_normal::KNormal::ExtArray;
+        use crate::id::IdGen;
+        use crate::k_normal::KNormal::ExtArray;
         let x = || "x".to_string();
         let e = ExtArray(x());
         let mut id_gen = IdGen::new();

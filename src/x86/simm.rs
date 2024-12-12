@@ -1,7 +1,7 @@
+use crate::syntax::IntBin;
+use crate::x86::asm;
+use crate::x86::asm::{Asm, CompBin, Exp, Fundef, IdOrImm, Prog};
 use std::collections::HashMap;
-use syntax::IntBin;
-use x86::asm;
-use x86::asm::{Asm, CompBin, Exp, Fundef, IdOrImm, Prog};
 
 // Name -> Const
 type ConstEnv = HashMap<String, i32>;
@@ -104,9 +104,9 @@ pub fn f(Prog(data, fundefs, e): Prog) -> Prog {
 
 #[cfg(test)]
 mod tests {
-    use syntax::{IntBin, Type};
-    use x86::asm::{Asm, CompBin, Exp, FCompBin, IdOrImm, Prog};
-    use x86::simm;
+    use crate::syntax::{IntBin, Type};
+    use crate::x86::asm::{Asm, CompBin, Exp, FCompBin, IdOrImm, Prog};
+    use crate::x86::simm;
     // Checks if g(a) == b. Since g is not public, a and b are wrapped in Prog.
     fn assert_g_works(a: Asm, b: Asm) {
         let e1 = Prog(Box::new([]), Box::new([]), a);

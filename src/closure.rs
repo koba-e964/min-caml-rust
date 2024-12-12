@@ -1,9 +1,9 @@
-use id;
-use k_normal::{KFundef, KNormal};
+use crate::id;
+use crate::k_normal::{KFundef, KNormal};
+use crate::syntax::{CompBin, FloatBin, IntBin, Type};
 use ordered_float::OrderedFloat;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
-use syntax::{CompBin, FloatBin, IntBin, Type};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Cls {
@@ -364,7 +364,7 @@ pub fn f(e: KNormal) -> Prog {
 
 #[cfg(test)]
 mod tests {
-    use closure::*;
+    use crate::closure::*;
     #[test]
     fn test_g_if() {
         let known = HashSet::new();

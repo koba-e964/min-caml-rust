@@ -1,4 +1,4 @@
-use syntax::Type;
+use crate::syntax::Type;
 
 /// Top-level labels. Used after closure-transformation.
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -1,8 +1,8 @@
-use id::IdGen;
+use crate::id::IdGen;
+use crate::syntax::{CompBin, FloatBin, Fundef, IntBin, Syntax, Type};
 use ordered_float::OrderedFloat;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
-use syntax::{CompBin, FloatBin, Fundef, IntBin, Syntax, Type};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum KNormal {
@@ -344,10 +344,7 @@ fn g(
             let ty = extenv.get(&x).unwrap(); // It is guaranteed that there is.
             match ty {
                 Type::Array(_) => (KNormal::ExtArray(x), ty.clone()),
-                _ => panic!(format!(
-                    "external variable {} does not have an array type",
-                    x
-                )),
+                _ => panic!("external variable {} does not have an array type", x),
             }
         }
         Syntax::LetRec(fundef, e2) => {
@@ -574,8 +571,8 @@ pub fn f(e: Syntax, id_gen: &mut IdGen, extenv: &HashMap<String, Type>) -> (KNor
 
 #[cfg(test)]
 mod tests {
-    use k_normal::*;
-    use syntax::*;
+    use crate::k_normal::*;
+    use crate::syntax::*;
     #[test]
     fn test_fv_let() {
         use self::KNormal::*;
@@ -585,8 +582,8 @@ mod tests {
         let z = || "z".to_string();
         let expr = Let(
             (x(), Type::Int),
-            Box::new(IntBin(::syntax::IntBin::Add, y(), y())),
-            Box::new(IntBin(::syntax::IntBin::Sub, z(), x())),
+            Box::new(IntBin(crate::syntax::IntBin::Add, y(), y())),
+            Box::new(IntBin(crate::syntax::IntBin::Sub, z(), x())),
         );
         assert_eq!(fv(&expr), vec![y(), z()].into_iter().collect());
     }
@@ -599,7 +596,7 @@ mod tests {
         let z = || "z".to_string();
         let expr = Let(
             (x(), Type::Int),
-            Box::new(IntBin(::syntax::IntBin::Add, y(), y())),
+            Box::new(IntBin(crate::syntax::IntBin::Add, y(), y())),
             Box::new(Var(z())),
         );
         assert_eq!(fv(&expr), vec![y(), z()].into_iter().collect());

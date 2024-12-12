@@ -1,9 +1,9 @@
 extern crate std;
-use id::IdGen;
+use crate::id::IdGen;
+use crate::syntax::*;
 use nom::types::CompleteByteSlice;
 use nom::{digit, IResult};
 use ordered_float::OrderedFloat;
-use syntax::*;
 
 pub fn parse(x: &[u8]) -> IResult<CompleteByteSlice, Syntax> {
     exp(CompleteByteSlice(x))
@@ -687,11 +687,11 @@ Operator precedence:
 
 #[cfg(test)]
 mod tests {
+    use crate::parser::parse;
     use ordered_float::OrderedFloat;
-    use parser::parse;
     #[test]
     fn test_simple_exp() {
-        use syntax::Syntax::*;
+        use crate::syntax::Syntax::*;
         assert_eq!(
             parse(b" ( c)"),
             Ok(((&[][..]).into(), Var("c".to_string())))
@@ -733,7 +733,7 @@ mod tests {
 
     #[test]
     fn test_let() {
-        use syntax::Syntax::{Int, Let};
+        use crate::syntax::Syntax::{Int, Let};
         let result = parse(b"let x = 0 in 1").unwrap();
         assert_eq!(result.0, (&[][..]).into());
         match result.1 {
@@ -748,8 +748,8 @@ mod tests {
 
     #[test]
     fn test_letrec() {
-        use syntax::Fundef;
-        use syntax::Syntax::{App, Int, LetRec, Var};
+        use crate::syntax::Fundef;
+        use crate::syntax::Syntax::{App, Int, LetRec, Var};
         let result = parse(b"let rec f x = x in f 1").unwrap();
         assert_eq!(result.0, (&[][..]).into());
         match result.1 {
@@ -771,7 +771,7 @@ mod tests {
 
     #[test]
     fn test_lettuple() {
-        use syntax::Syntax::{App, Int, LetTuple, Var};
+        use crate::syntax::Syntax::{App, Int, LetTuple, Var};
         let result = parse(b"let (x, y) = make_pair 1 2 in x").unwrap();
         assert_eq!(result.0, (&[][..]).into());
         match result.1 {
@@ -791,8 +791,8 @@ mod tests {
 
     #[test]
     fn test_semicolon() {
-        use syntax::Syntax::{App, Int, Let, Unit, Var};
-        use syntax::Type;
+        use crate::syntax::Syntax::{App, Int, Let, Unit, Var};
+        use crate::syntax::Type;
         let result = parse(b"print_int 0; (); print_int 1");
         let print_int = || Box::new(Var("print_int".to_string()));
         let dummy = || ("_dummy".to_string(), Type::Unit);
@@ -816,7 +816,7 @@ mod tests {
 
     #[test]
     fn test_if() {
-        use syntax::Syntax::{App, If, Int, Var};
+        use crate::syntax::Syntax::{App, If, Int, Var};
         assert_eq!(
             parse(b"if f 3 then 4 else 0"),
             Ok((
@@ -832,7 +832,7 @@ mod tests {
 
     #[test]
     fn test_if2() {
-        use syntax::Syntax::{App, If, Int, Var};
+        use crate::syntax::Syntax::{App, If, Int, Var};
         assert_eq!(
             parse(b" if f 3 then 4 else 0 "),
             Ok((
@@ -848,8 +848,8 @@ mod tests {
 
     #[test]
     fn test_comma() {
-        use syntax::Syntax::{Int, Tuple, Var};
-        use syntax::{IntBin, Syntax};
+        use crate::syntax::Syntax::{Int, Tuple, Var};
+        use crate::syntax::{IntBin, Syntax};
         let x = || Var("x".to_string());
         let y = || Var("y".to_string());
         let z = || Var("z".to_string());
@@ -875,8 +875,8 @@ mod tests {
 
     #[test]
     fn test_comp() {
-        use syntax::Syntax::Int;
-        use syntax::{CompBin, IntBin, Syntax};
+        use crate::syntax::Syntax::Int;
+        use crate::syntax::{CompBin, IntBin, Syntax};
         assert_eq!(
             parse(b"1 < 2 + 3"),
             Ok((
@@ -940,9 +940,9 @@ mod tests {
 
     #[test]
     fn test_mult() {
-        use syntax::FloatBin;
-        use syntax::Syntax;
-        use syntax::Syntax::Var;
+        use crate::syntax::FloatBin;
+        use crate::syntax::Syntax;
+        use crate::syntax::Syntax::Var;
         assert_eq!(
             parse(b"x *. y"),
             Ok((
@@ -973,9 +973,9 @@ mod tests {
 
     #[test]
     fn test_multadd() {
-        use syntax::FloatBin;
-        use syntax::Syntax;
-        use syntax::Syntax::Var;
+        use crate::syntax::FloatBin;
+        use crate::syntax::Syntax;
+        use crate::syntax::Syntax::Var;
         assert_eq!(
             parse(b"x /. y +. z"),
             Ok((
@@ -1010,7 +1010,7 @@ mod tests {
 
     #[test]
     fn test_unary_minus() {
-        use syntax::Syntax::{FNeg, Float, Int, Neg, Var};
+        use crate::syntax::Syntax::{FNeg, Float, Int, Neg, Var};
         assert_eq!(parse(b"-2"), Ok(((&[][..]).into(), Neg(Box::new(Int(2))))));
         assert_eq!(
             parse(b"--2"),
@@ -1029,7 +1029,7 @@ mod tests {
 
     #[test]
     fn test_exp_not() {
-        use syntax::Syntax::{Bool, Not};
+        use crate::syntax::Syntax::{Bool, Not};
         assert_eq!(
             parse(b"!!true"),
             Ok(((&[][..]).into(), Not(Box::new(Not(Box::new(Bool(true)))))))
@@ -1038,7 +1038,7 @@ mod tests {
 
     #[test]
     fn test_app() {
-        use syntax::Syntax::{App, Int, Var};
+        use crate::syntax::Syntax::{App, Int, Var};
         assert_eq!(
             parse(b"func 0 1"),
             Ok((
@@ -1053,7 +1053,7 @@ mod tests {
 
     #[test]
     fn test_array_create() {
-        use syntax::Syntax::{Array, Int};
+        use crate::syntax::Syntax::{Array, Int};
         assert_eq!(
             parse(b"Array.create 2 3"),
             Ok(((&[][..]).into(), Array(Box::new(Int(2)), Box::new(Int(3)))))

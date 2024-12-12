@@ -1,8 +1,8 @@
-use id;
+use crate::id;
+use crate::syntax::{FloatBin, IntBin, Type};
+use crate::x86::asm;
+use crate::x86::asm::{Asm, Exp, Fundef, IdOrImm, Prog};
 use id::IdGen;
-use syntax::{FloatBin, IntBin, Type};
-use x86::asm;
-use x86::asm::{Asm, Exp, Fundef, IdOrImm, Prog};
 
 use std::collections::{HashMap, HashSet};
 
@@ -86,7 +86,7 @@ fn g(
     asm: Asm,
     id_gen: &mut IdGen,
 ) -> (Asm, RegEnv) {
-    use x86::asm::Asm::{Ans, Let};
+    use crate::x86::asm::Asm::{Ans, Let};
     match asm {
         Ans(exp) => g_exp_with_restore(dest, cont, regenv, exp, id_gen),
         Let(x, t, exp, e) => {

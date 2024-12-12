@@ -89,21 +89,21 @@ fn run(program: &[u8], output_path: &Path) -> Result<(), std::io::Error> {
     let mut id_gen = id::IdGen::new();
     let program = match parser::remove_comments(program) {
         Ok(p) => p,
-        Err(msg) => panic!(msg),
+        Err(msg) => panic!("{msg}"),
     };
     println!("comment-removed: {:?}", String::from_utf8(program.clone()));
     let expr = match parser::parse(&program) {
         Ok((_, expr)) => expr,
         Err(Err::Incomplete(_)) => panic!("incomplete"),
-        Err(Err::Error(alt)) => panic!(format!("error: {:?}", alt)),
-        Err(Err::Failure(alt)) => panic!(format!("failure: {:?}", alt)),
+        Err(Err::Error(alt)) => panic!("error: {:?}", alt),
+        Err(Err::Failure(alt)) => panic!("failure: {:?}", alt),
     };
     let expr = parser::uniquify(expr, &mut id_gen);
     println!("expr = {:?}", expr);
     let mut extenv = EXTENV.clone();
     let expr = match typing::f(&expr, &mut id_gen, &mut extenv) {
         Ok(x) => x,
-        Err(msg) => panic!(format!("error typecheck: {}", msg)),
+        Err(msg) => panic!("error typecheck: {}", msg),
     };
     println!("typed expr = {:?}", expr);
     let k_normal = k_normal::f(expr, &mut id_gen, &extenv);

@@ -1,14 +1,14 @@
-use closure;
+use crate::closure;
+use crate::id;
+use crate::syntax;
+use crate::x86::asm;
+use crate::x86::asm::{Asm, CompBin, Exp, FCompBin, Fundef, IdOrImm, Prog};
 use closure::Closure;
-use id;
 use id::IdGen;
 use ordered_float::OrderedFloat;
 use std::collections::HashMap;
-use syntax;
 use syntax::IntBin;
 use syntax::Type;
-use x86::asm;
-use x86::asm::{Asm, CompBin, Exp, FCompBin, Fundef, IdOrImm, Prog};
 
 /*
  * S: State
@@ -139,7 +139,7 @@ fn g(
             },
             e2,
         ) => {
-            use x86::asm::REG_HP;
+            use crate::x86::asm::REG_HP;
             let mut copied_env = env.clone();
             copied_env.insert(x.clone(), t.clone());
             let e2p = g(data, &copied_env, *e2, id_gen);
@@ -218,7 +218,7 @@ fn g(
             Asm::Ans(Exp::CallDir(id::L(x), intargs, floatargs))
         }
         Closure::Tuple(xs) => {
-            use x86::asm::{align, REG_HP};
+            use crate::x86::asm::{align, REG_HP};
             let y = id_gen.gen_id("t");
             let xs_with_type = xs
                 .iter()
@@ -331,7 +331,7 @@ fn h(
         &zts,
         (4, inner_e),
         |_, z, offset, load| {
-            ::x86::asm::fletd(z, Exp::LdDF(x.clone(), IdOrImm::C(offset), 1), load)
+            crate::x86::asm::fletd(z, Exp::LdDF(x.clone(), IdOrImm::C(offset), 1), load)
         },
         |_, z, t, offset, load| {
             Asm::Let(
@@ -373,8 +373,8 @@ pub fn f(closure::Prog(fundefs, e): closure::Prog, id_gen: &mut IdGen) -> Prog {
 
 #[cfg(test)]
 mod tests {
-    use closure::*;
-    use x86::virtual_asm::*;
+    use crate::closure::*;
+    use crate::x86::virtual_asm::*;
     #[test]
     fn test_comparison() {
         use std::collections::HashMap;
@@ -427,7 +427,7 @@ mod tests {
         let mut id_gen = IdGen::new();
         let expected;
         {
-            use syntax::IntBin;
+            use crate::syntax::IntBin;
 
             let e5 = Asm::Ans(Exp::Nop);
             // Note that g() may change its behavior. Temporary variables' names are therefore random.

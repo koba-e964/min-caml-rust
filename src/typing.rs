@@ -1,6 +1,6 @@
-use id::IdGen;
+use crate::id::IdGen;
+use crate::syntax::{Fundef, Syntax, Type};
 use std::collections::HashMap;
-use syntax::{Fundef, Syntax, Type};
 
 /**
  * typing.rs (typing.ml in original min-caml)
@@ -13,7 +13,7 @@ use syntax::{Fundef, Syntax, Type};
 
 /* Type that represents an exception */
 #[derive(Debug)]
-enum TypingError {
+pub enum TypingError {
     Unify(Type, Type),
 }
 
@@ -384,12 +384,12 @@ pub fn f(
 
 #[cfg(test)]
 mod tests {
+    use crate::syntax::*;
+    use crate::typing::*;
     use std::collections::HashMap;
-    use syntax::*;
-    use typing::*;
     #[test]
     fn test_typing_add() {
-        use self::Syntax::*;
+        use super::Syntax::*;
         let mut id_gen = IdGen::new();
         let mut extenv = HashMap::new();
         let syn = IntBin(self::IntBin::Add, Box::new(Int(14)), Box::new(Int(23)));
@@ -397,7 +397,7 @@ mod tests {
     }
     #[test]
     fn test_typing_ext_print() {
-        use self::Syntax::*;
+        use super::Syntax::*;
         let mut id_gen = IdGen::new();
         let mut extenv = HashMap::new();
         let syn = App(Box::new(Var("print_int".to_string())), Box::new([Int(23)]));
@@ -405,7 +405,7 @@ mod tests {
     }
     #[test]
     fn test_typing_letrec() {
-        use self::Syntax::*;
+        use super::Syntax::*;
         let mut id_gen = IdGen::new();
         let mut extenv = HashMap::new();
         // let rec f x = f x in f 0
@@ -443,7 +443,7 @@ mod tests {
     }
     #[test]
     fn test_typing_array() {
-        use self::Syntax::*;
+        use super::Syntax::*;
         let mut id_gen = IdGen::new();
         let mut extenv = HashMap::new();
         let ary = Array(Box::new(Int(4)), Box::new(Int(5))); // newarray 4 5
@@ -453,7 +453,7 @@ mod tests {
     }
     #[test]
     fn test_typing_extenv() {
-        use self::Syntax::*;
+        use super::Syntax::*;
         let mut id_gen = IdGen::new();
         let test = || "test".to_string();
         let mut extenv = [(test(), Type::Unit)].iter().cloned().collect();

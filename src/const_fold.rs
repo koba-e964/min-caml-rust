@@ -1,9 +1,7 @@
-extern crate std;
-
-use id::IdGen;
-use k_normal::{KFundef, KNormal};
+use crate::id::IdGen;
+use crate::k_normal::{KFundef, KNormal};
+use crate::syntax::{CompBin, FloatBin, IntBin, Type};
 use std::collections::HashMap;
-use syntax::{CompBin, FloatBin, IntBin, Type};
 
 // Changed from the original ml source
 #[derive(Clone, Debug)]
@@ -194,12 +192,12 @@ pub fn f(e: KNormal, id_gen: &mut IdGen) -> KNormal {
 
 #[cfg(test)]
 mod tests {
-    use id::IdGen;
+    use crate::id::IdGen;
     #[test]
     fn test_constfold_ops() {
         use super::f;
-        use k_normal::KNormal::*;
-        use syntax::{IntBin, Type};
+        use crate::k_normal::KNormal::*;
+        use crate::syntax::{IntBin, Type};
         let mut id_gen = IdGen::new();
         // let x = 1 in let y = x + x in let z = y - x in z should become
         // 1
@@ -233,8 +231,8 @@ mod tests {
     #[test]
     fn test_constfold_tuple() {
         use super::f;
-        use k_normal::KNormal::*;
-        use syntax::{IntBin, Type};
+        use crate::k_normal::KNormal::*;
+        use crate::syntax::{IntBin, Type};
         let mut id_gen = IdGen::new();
         // let x = 1 in let y = 2 in let z = (x, y) in let (u, v) = z in u + v
         // should become

@@ -1,7 +1,7 @@
-use id;
+use crate::id;
+use crate::syntax::{FloatBin, IntBin, Type};
 use std::collections::HashSet;
 use std::fmt;
-use syntax::{FloatBin, IntBin, Type};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum IdOrImm {

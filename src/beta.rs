@@ -1,6 +1,4 @@
-extern crate std;
-
-use k_normal::{KFundef, KNormal};
+use crate::k_normal::{KFundef, KNormal};
 use std::collections::HashMap;
 
 fn g(env: &HashMap<String, String>, e: KNormal) -> KNormal {
@@ -90,8 +88,8 @@ mod tests {
     #[test]
     fn test_let_var() {
         use super::f;
-        use k_normal::KNormal::*;
-        use syntax::Type;
+        use crate::k_normal::KNormal::*;
+        use crate::syntax::Type;
         // let x = 1 in let y = x in y should be
         // let x = 1 in x
         let x = || "x".to_string();
@@ -111,7 +109,7 @@ mod tests {
     #[test]
     fn test_let_tuple() {
         use super::f;
-        use k_normal::KNormal::App;
+        use crate::k_normal::KNormal::App;
         // A bug in find_vec_mut! makes this test fail
         // x y z should be
         // x y z
@@ -125,8 +123,8 @@ mod tests {
     #[test]
     fn test_does_not_affect() {
         use super::f;
-        use k_normal::KNormal::*;
-        use syntax::Type;
+        use crate::k_normal::KNormal::*;
+        use crate::syntax::Type;
         let x = || "x".to_string();
         let y = || "y".to_string();
         let e = Let(

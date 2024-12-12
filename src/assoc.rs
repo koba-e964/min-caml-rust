@@ -1,7 +1,5 @@
-extern crate std;
-
-use k_normal::{KFundef, KNormal};
-use syntax::Type;
+use crate::k_normal::{KFundef, KNormal};
+use crate::syntax::Type;
 
 fn insert(e: KNormal, xt: (String, Type), e2: KNormal) -> KNormal {
     use self::KNormal::*;
@@ -57,9 +55,9 @@ mod tests {
     #[test]
     fn test_let_var() {
         use super::f;
-        use k_normal::KNormal::*;
-        use syntax::IntBin::Add;
-        use syntax::Type;
+        use crate::k_normal::KNormal::*;
+        use crate::syntax::IntBin::Add;
+        use crate::syntax::Type;
         // let x = let y = 1 in y + k in x + l
         // should become
         // let y = 1 in let x = y + k in x + l
@@ -90,8 +88,8 @@ mod tests {
     #[test]
     fn test_does_not_affect() {
         use super::f;
-        use k_normal::KNormal::*;
-        use syntax::Type;
+        use crate::k_normal::KNormal::*;
+        use crate::syntax::Type;
         let x = || "x".to_string();
         let y = || "y".to_string();
         let e = Let(

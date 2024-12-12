@@ -1,8 +1,8 @@
-use alpha;
-use id::IdGen;
-use k_normal::{fv, KFundef, KNormal};
+use crate::alpha;
+use crate::id::IdGen;
+use crate::k_normal::{fv, KFundef, KNormal};
+use crate::syntax::Type;
 use std::collections::HashMap;
-use syntax::Type;
 
 type TypeEnv = HashMap<String, (Box<[(String, Type)]>, KNormal)>;
 
@@ -93,10 +93,10 @@ mod tests {
     #[test]
     fn test_inline() {
         use super::f;
-        use id::IdGen;
-        use k_normal::KFundef;
-        use k_normal::KNormal::{App, IntBin, LetRec};
-        use syntax::Type;
+        use crate::id::IdGen;
+        use crate::k_normal::KFundef;
+        use crate::k_normal::KNormal::{App, IntBin, LetRec};
+        use crate::syntax::Type;
         // let rec f x = x + x in f y ===> let rec f x = x + x in y + y
         let ff = || "f".to_string();
         let x = || "x".to_string();
@@ -105,7 +105,7 @@ mod tests {
             KFundef {
                 name: (ff(), Type::Fun(Box::new([Type::Int]), Box::new(Type::Int))),
                 args: Box::new([("x".to_string(), Type::Int)]),
-                body: Box::new(IntBin(::syntax::IntBin::Add, x(), x())),
+                body: Box::new(IntBin(crate::syntax::IntBin::Add, x(), x())),
             },
             Box::new(App(ff(), Box::new([y()]))),
         );
@@ -113,9 +113,9 @@ mod tests {
             KFundef {
                 name: (ff(), Type::Fun(Box::new([Type::Int]), Box::new(Type::Int))),
                 args: Box::new([("x".to_string(), Type::Int)]),
-                body: Box::new(IntBin(::syntax::IntBin::Add, x(), x())),
+                body: Box::new(IntBin(crate::syntax::IntBin::Add, x(), x())),
             },
-            Box::new(IntBin(::syntax::IntBin::Add, y(), y())),
+            Box::new(IntBin(crate::syntax::IntBin::Add, y(), y())),
         );
         let mut id_gen = IdGen::new();
         assert_eq!(f(e, &mut id_gen, 5000), e_expected);

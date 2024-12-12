@@ -1,7 +1,5 @@
-extern crate std;
-
-use k_normal::fv;
-use k_normal::{KFundef, KNormal};
+use crate::k_normal::fv;
+use crate::k_normal::{KFundef, KNormal};
 
 fn has_effect(e: &KNormal) -> bool {
     use self::KNormal::*;
@@ -76,8 +74,8 @@ mod tests {
     #[test]
     fn test_unnecessary_let() {
         use super::f;
-        use k_normal::KNormal::*;
-        use syntax::Type;
+        use crate::k_normal::KNormal::*;
+        use crate::syntax::Type;
         // let x = 1 in let y = x in 1 should become
         // 1
         let x = || "x".to_string();
@@ -93,9 +91,9 @@ mod tests {
     #[test]
     fn test_unnecessary_letrec() {
         use super::f;
-        use k_normal::KFundef;
-        use k_normal::KNormal::*;
-        use syntax::{IntBin, Type};
+        use crate::k_normal::KFundef;
+        use crate::k_normal::KNormal::*;
+        use crate::syntax::{IntBin, Type};
         // let rec f x = x + x in 6 should become
         // 6
         let x = || "x".to_string();
@@ -114,8 +112,8 @@ mod tests {
     #[test]
     fn test_unnecessary_lettuple() {
         use super::f;
-        use k_normal::KNormal::*;
-        use syntax::Type;
+        use crate::k_normal::KNormal::*;
+        use crate::syntax::Type;
         // let (x, y) = z in 6 should become
         // 6
         let e = LetTuple(
