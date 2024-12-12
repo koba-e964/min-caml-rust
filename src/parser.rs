@@ -338,13 +338,13 @@ macro_rules! exp_binary_operator {
                     $next_rule,
                     many0(preceded(
                         multispace0,
-                        tuple((multispace0, $op, multispace0, $next_rule)),
+                        map(
+                            tuple((multispace0, $op, multispace0, $next_rule)),
+                            |(_, op, _, arg)| (op, arg),
+                        ),
                     )),
                 )),
-                |(init, res)| {
-                    res.into_iter()
-                        .fold(init, |acc, (_, op, _, arg)| $folder(acc, (op, arg)))
-                },
+                |(init, res)| res.into_iter().fold(init, $folder),
             )(i)
         }
     };
@@ -387,10 +387,10 @@ exp_binary_operator!(
 );
 fn add_op(i: &[u8]) -> IResult<&[u8], Result<IntBin, FloatBin>> {
     alt((
-        map(tag("+."), |_| Err(FloatBin::FAdd)),
-        map(tag("-."), |_| Err(FloatBin::FSub)),
-        map(char('+'), |_| Ok(IntBin::Add)),
-        map(char('-'), |_| Ok(IntBin::Sub)),
+        value(Err(FloatBin::FAdd), tag("+.")),
+        value(Err(FloatBin::FSub), tag("-.")),
+        value(Ok(IntBin::Add), char('+')),
+        value(Ok(IntBin::Sub), char('-')),
     ))(i)
 }
 
