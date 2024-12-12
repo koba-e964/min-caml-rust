@@ -16,10 +16,11 @@ jobs:
     runs-on: ubuntu-latest
     # https://doc.rust-lang.org/cargo/guide/continuous-integration.html
     strategy:
+      fail-fast: false
       matrix:
         toolchain:
         - stable
-        - '1.66.1' # 2023-01-10, meant to be about 2 years ago
+        - '1.74.1' # 2023-12-07, meant to be about 1 year ago
         - beta
         - nightly
     steps:
@@ -30,6 +31,7 @@ jobs:
       run: cargo --version
     - name: Install tools
       run: |
+        rustup component add clippy rustfmt
         cargo install cargo-expand
         cargo install cargo-bloat
     - name: Build
