@@ -17,7 +17,7 @@ pub fn g(env: &HashMap<String, String>, e: KNormal, id_gen: &mut IdGen) -> KNorm
     };
     let find_vec_mut = |vec: &mut [String]| {
         for v in vec.iter_mut() {
-            *v = find(std::mem::replace(v, String::new()));
+            *v = find(std::mem::take(v));
         }
     };
     match e {

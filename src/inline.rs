@@ -60,7 +60,7 @@ fn g(env: &TypeEnv, e: KNormal, id_gen: &mut IdGen, inline_threshold: usize) -> 
                 KFundef {
                     name: (x, t),
                     args: yts,
-                    body: Box::new(g(&env, *e1, id_gen, inline_threshold)),
+                    body: Box::new(g(env, *e1, id_gen, inline_threshold)),
                 }, // avoid further inlining in the body of recursive functions
                 Box::new(g(&cp_env, *e2, id_gen, inline_threshold)),
             )

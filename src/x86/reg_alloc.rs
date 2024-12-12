@@ -344,7 +344,7 @@ fn target_exp(src: &str, dest_t: &(String, Type), exp: &Exp) -> (bool, Vec<Strin
     use self::Exp::*;
     let (ref dest, ref t) = dest_t;
     match exp {
-        Mov(ref x) if x == src && asm::is_reg(&dest) => {
+        Mov(ref x) if x == src && asm::is_reg(dest) => {
             assert_ne!(t, &Type::Unit);
             assert_ne!(t, &Type::Float);
             (false, vec![dest.clone()])
@@ -378,7 +378,7 @@ fn target_exp(src: &str, dest_t: &(String, Type), exp: &Exp) -> (bool, Vec<Strin
 
 fn target_args(src: &str, all: &[String], ys: &[String]) -> Vec<String> {
     let mut ans = vec![];
-    assert!(ys.len() <= all.len() - 1);
+    assert!(ys.len() < all.len());
     for i in 0..ys.len() {
         if ys[i] == src {
             ans.push(all[i].clone());
@@ -491,10 +491,8 @@ fn alloc(cont: Asm, regenv: &RegEnv, x: String, t: Type, preference: &[String]) 
     for y in &free {
         if asm::is_reg(y) {
             live.insert(y.to_string());
-        } else {
-            if let Some(result) = regenv.get(y) {
-                live.insert(result.to_string());
-            }
+        } else if let Some(result) = regenv.get(y) {
+            live.insert(result.to_string());
         }
     }
     // Find a register that is not alive

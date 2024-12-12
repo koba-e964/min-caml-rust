@@ -74,7 +74,7 @@ fn main() {
     } else {
         output_pathbuf = Path::new(&args[2]).to_path_buf();
     }
-    let program = read_from_file(&path).unwrap();
+    let program = read_from_file(path).unwrap();
     run(&program, &output_pathbuf).unwrap();
 }
 
@@ -133,6 +133,6 @@ fn run(program: &[u8], output_path: &Path) -> Result<(), std::io::Error> {
 
     // Write to file
     let mut outfile = BufWriter::new(File::create(output_path)?);
-    write!(outfile, "{}\n", reg_alloc)?;
+    writeln!(outfile, "{}", reg_alloc)?;
     Ok(())
 }

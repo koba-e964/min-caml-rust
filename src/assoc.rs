@@ -16,10 +16,9 @@ fn insert(e: KNormal, xt: (String, Type), e2: KNormal) -> KNormal {
     }
 }
 
-/// For example, let x = let y = 1 in y + 1 in x + 3
+/// For example, `let x = let y = 1 in y + 1 in x + 3`
 /// becomes
-/// let y = 1 in let x = y + 1 in x + 3
-
+/// `let y = 1 in let x = y + 1 in x + 3`.
 pub fn f(e: KNormal) -> KNormal {
     use self::KNormal::*;
     macro_rules! invoke {

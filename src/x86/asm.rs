@@ -274,7 +274,7 @@ pub const REG_SP: &str = "%ebp";
 pub const REG_HP: &str = "min_caml_hp";
 
 pub fn is_reg(x: &str) -> bool {
-    let c = x.chars().nth(0);
+    let c = x.chars().next();
     c == Some('%') || x == REG_HP
 }
 

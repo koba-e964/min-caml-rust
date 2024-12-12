@@ -342,7 +342,7 @@ named!(ident<CompleteByteSlice, String>, ws!(do_parse!(
 )));
 
 fn is_not_ident_u8(x: u8) -> bool {
-    !((b'0' <= x && x <= b'9') || (b'A' <= x && x <= b'Z') || (b'a' <= x && x <= b'z') || x == b'_')
+    !(x.is_ascii_alphanumeric() || x == b'_')
 }
 
 fn is_ident(x: CompleteByteSlice) -> bool {
@@ -350,8 +350,8 @@ fn is_ident(x: CompleteByteSlice) -> bool {
 }
 
 fn is_ident_u8_slice(x: &[u8]) -> bool {
-    let keywords = vec![
-        &b"let"[..],
+    let keywords = [
+        b"let",
         &b"rec"[..],
         &b"in"[..],
         &b"true"[..],

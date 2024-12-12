@@ -379,11 +379,12 @@ fn g(
                     extfunname = Some(f.to_string());
                 }
             }
-            if extfunname == None {
+            if extfunname.is_none() {
                 let g_e1 = invoke!(*e1);
                 match g_e1.1.clone() {
                     Type::Fun(_, t) => {
                         // TODO very rough way to simulate an internal recursive function in the original code
+                        #[allow(clippy::too_many_arguments)]
                         fn bind(
                             mut xs: Vec<String>,
                             p: usize,
@@ -429,6 +430,7 @@ fn g(
                 match extenv.get(&extfunname).unwrap().clone() {
                     Type::Fun(_, t) => {
                         // TODO very rough way to simulate an internal recursive function in the original code
+                        #[allow(clippy::too_many_arguments)]
                         fn bind(
                             mut xs: Vec<String>,
                             p: usize,

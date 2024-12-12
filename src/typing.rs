@@ -145,13 +145,13 @@ fn occur(r1: usize, ty: &Type) -> bool {
 fn unify(
     t1: &Type,
     t2: &Type,
-    extenv: &mut HashMap<String, Type>,
+    _extenv: &mut HashMap<String, Type>,
     tyenv: &mut HashMap<usize, Type>,
 ) -> Result<(), TypingError> {
     println!("unify {:?} {:?}", t1, t2);
     macro_rules! invoke {
         ($t1:expr, $t2:expr) => {
-            unify($t1, $t2, extenv, tyenv)
+            unify($t1, $t2, _extenv, tyenv)
         };
     }
     macro_rules! unify_seq {
@@ -377,7 +377,7 @@ pub fn f(
     }
     *extenv = extenv
         .iter()
-        .map(|(k, x)| (k.clone(), deref_typ(&x, &tyenv)))
+        .map(|(k, x)| (k.clone(), deref_typ(x, &tyenv)))
         .collect();
     Ok(deref_term(e, &tyenv))
 }
