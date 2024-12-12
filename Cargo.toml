@@ -4,6 +4,7 @@ version = "0.1.0"
 authors = ["koba-e964 <3303362+koba-e964@users.noreply.github.com>"]
 publish = false
 edition = "2021"
+rust-version = "1.74"
 
 [dependencies]
 nom = "4"
