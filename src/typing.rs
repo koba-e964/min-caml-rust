@@ -369,11 +369,8 @@ pub fn f(
     let mut tyenv = HashMap::new();
     let typed = g(&HashMap::new(), e, extenv, &mut tyenv, id_gen).unwrap();
     println!("{:?}", typed);
-    match unify(&Type::Unit, &typed, extenv, &mut tyenv) {
-        Err(TypingError::Unify(_, _)) => {
-            return Err("top level does not have type unit".to_string())
-        }
-        Ok(()) => {}
+    if let Err(TypingError::Unify(_, _)) = unify(&Type::Unit, &typed, extenv, &mut tyenv) {
+        return Err("top level does not have type unit".to_string());
     }
     *extenv = extenv
         .iter()
