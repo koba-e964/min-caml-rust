@@ -5,7 +5,7 @@ extern crate nom;
 
 use min_caml_rust::syntax::Type;
 use min_caml_rust::{
-    alpha, assoc, beta, closure, const_fold, elim, id, inline, k_normal, parser, typing, x86,
+    alpha, arm64, assoc, beta, closure, const_fold, elim, id, inline, k_normal, parser, typing,
 };
 use nom::Err;
 use std::collections::HashMap;
@@ -122,12 +122,12 @@ fn run(program: &[u8], output_path: &Path) -> Result<(), std::io::Error> {
     }
     let closure = closure::f(e);
     println!("closure-trans = {}", closure);
-    let virtual_asm = x86::virtual_asm::f(closure, &mut id_gen);
+    let virtual_asm = arm64::virtual_asm::f(closure, &mut id_gen);
     println!("virtual_asm = {}", virtual_asm);
     println!();
-    let simm = x86::simm::f(virtual_asm);
+    let simm = arm64::simm::f(virtual_asm);
     println!("simm = {}", simm);
-    let reg_alloc = x86::reg_alloc::f(simm, &mut id_gen);
+    let reg_alloc = arm64::reg_alloc::f(simm, &mut id_gen);
     println!("reg_alloc = {}", reg_alloc);
     println!();
 
