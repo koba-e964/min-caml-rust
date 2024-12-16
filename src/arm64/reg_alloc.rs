@@ -478,7 +478,7 @@ fn add(x: String, reg: String, mut regenv: RegEnv) -> RegEnv {
 fn alloc(cont: Asm, regenv: &RegEnv, x: String, t: Type, preference: &[String]) -> AllocResult {
     assert!(!regenv.contains_key(&x));
     let all = match t {
-        Type::Unit => return AllocResult::Alloc("%unit".to_string()),
+        Type::Unit => return AllocResult::Alloc("$unit".to_string()),
         Type::Float => asm::fregs(),
         _ => asm::regs(),
     };
@@ -530,10 +530,10 @@ mod tests {
     use super::*;
     #[test]
     fn test_find() {
-        let regenv = vec![("aa".to_string(), "%eax".to_string())]
+        let regenv = vec![("aa".to_string(), "$r1".to_string())]
             .into_iter()
             .collect();
-        assert_eq!(find("aa", &Type::Int, &regenv), Ok("%eax".to_string()));
+        assert_eq!(find("aa", &Type::Int, &regenv), Ok("$r1".to_string()));
         assert_eq!(
             find("bb", &Type::Int, &regenv),
             Err(NoReg("bb".to_string(), Type::Int))
@@ -541,12 +541,12 @@ mod tests {
     }
     #[test]
     fn test_find_p() {
-        let regenv = vec![("aa".to_string(), "%eax".to_string())]
+        let regenv = vec![("aa".to_string(), "$r0".to_string())]
             .into_iter()
             .collect();
         assert_eq!(
             find_p(&IdOrImm::V("aa".to_string()), &regenv),
-            Ok(IdOrImm::V("%eax".to_string()))
+            Ok(IdOrImm::V("$r0".to_string()))
         );
         assert_eq!(
             find_p(&IdOrImm::V("bb".to_string()), &regenv),
@@ -559,24 +559,24 @@ mod tests {
         let regenv = HashMap::new();
         let x = "a".to_string();
         let t = Type::Int;
-        let preference = ["%eax".to_string()];
+        let preference = ["$r1".to_string()];
         assert_eq!(
             alloc(cont, &regenv, x, t, &preference),
-            AllocResult::Alloc("%eax".to_string()),
+            AllocResult::Alloc("$r1".to_string()),
         )
     }
     #[test]
     fn test_alloc_not_in_preference() {
         let cont = Asm::Ans(Exp::Mov("b".to_string()));
-        let regenv = vec![("b".to_string(), "x0".to_string())]
+        let regenv = vec![("b".to_string(), "$x0".to_string())]
             .into_iter()
             .collect();
         let x = "a".to_string();
         let t = Type::Int;
-        let preference = ["x0".to_string()];
+        let preference = ["$x0".to_string()];
         assert_eq!(
             alloc(cont, &regenv, x, t, &preference),
-            AllocResult::Alloc("x1".to_string()),
+            AllocResult::Alloc("$x1".to_string()),
         )
     }
 }
