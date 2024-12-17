@@ -249,7 +249,7 @@ pub fn seq(id_gen: &mut id::IdGen, e1: Exp, e2: Asm) -> Asm {
 }
 
 pub fn regs() -> Vec<String> {
-    let mut res = vec!["".to_string(); 4];
+    let mut res = vec!["".to_string(); 30];
     for (i, item) in res.iter_mut().enumerate() {
         *item = format!("$x{i}");
     }

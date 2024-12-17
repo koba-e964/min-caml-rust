@@ -378,6 +378,7 @@ fn target_exp(src: &str, dest_t: &(String, Type), exp: &Exp) -> (bool, Vec<Strin
 
 fn target_args(src: &str, all: &[String], ys: &[String]) -> Vec<String> {
     let mut ans = vec![];
+    // We don't support too many arguments for a function call.
     assert!(ys.len() < all.len());
     for i in 0..ys.len() {
         if ys[i] == src {
@@ -390,7 +391,7 @@ fn target_args(src: &str, all: &[String], ys: &[String]) -> Vec<String> {
 /// The author hasn't understood the meaning of this function.
 /// TODO understand this
 /// "register sourcing" (?) as opposed to register targeting
-/// （arm64の2オペランド命令のためのregister coalescing） *) TODO
+/// （arm64の2オペランド命令のためのregister coalescing） *)
 fn source(t: &Type, asm: &Asm) -> Vec<String> {
     match asm {
         Asm::Ans(ref exp) => source_exp(t, exp),
@@ -474,7 +475,7 @@ fn add(x: String, reg: String, mut regenv: RegEnv) -> RegEnv {
     regenv
 }
 
-// Decide to allocate a register or spill.
+/// Decides to allocate a register or spill.
 fn alloc(cont: Asm, regenv: &RegEnv, x: String, t: Type, preference: &[String]) -> AllocResult {
     assert!(!regenv.contains_key(&x));
     let all = match t {
