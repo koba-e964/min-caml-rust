@@ -1,8 +1,4 @@
-extern crate min_caml_rust;
-#[macro_use]
-extern crate lazy_static;
-extern crate nom;
-
+use lazy_static::lazy_static;
 use min_caml_rust::syntax::Type;
 use min_caml_rust::{
     alpha, arm64, assoc, beta, closure, const_fold, elim, id, inline, k_normal, parser, typing,

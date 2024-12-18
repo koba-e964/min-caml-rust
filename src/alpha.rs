@@ -1,5 +1,3 @@
-extern crate std;
-
 use crate::id::IdGen;
 use crate::k_normal::{KFundef, KNormal};
 use std::collections::HashMap;
