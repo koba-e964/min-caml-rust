@@ -259,7 +259,7 @@ pub fn regs() -> Vec<String> {
 pub fn fregs() -> Vec<String> {
     let mut res = vec!["".to_string(); 32];
     for (i, item) in res.iter_mut().enumerate() {
-        *item = format!("$v{i}");
+        *item = format!("$d{i}");
     }
     res
 }
