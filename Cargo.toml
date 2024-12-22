@@ -10,6 +10,7 @@ rust-version = "1.74"
 nom = "7"
 ordered-float = "4"
 lazy_static = "1"
+graph_util = { path = "./graph_util" }
 
 [profile.dev]
 debug = false
