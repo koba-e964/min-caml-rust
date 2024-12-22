@@ -102,8 +102,15 @@ fn g(
             match alloc(cont_p, &regenv1, x.clone(), t.clone(), &targets_sources) {
                 AllocResult::Spill(y) => {
                     let r = regenv1[&y].clone();
-                    let (e2_p, regenv2) =
-                        g(dest, cont, &add(x.clone(), r.clone(), regenv1), *e, id_gen);
+                    let mut regenv_cp = regenv1.clone();
+                    regenv_cp.remove(&y);
+                    let (e2_p, regenv2) = g(
+                        dest,
+                        cont,
+                        &add(x.clone(), r.clone(), regenv_cp),
+                        *e,
+                        id_gen,
+                    );
                     let save = match regenv.get(&y) {
                         Some(var) => Exp::Save(var.clone(), y),
                         None => Exp::Nop,
