@@ -32,8 +32,8 @@ jobs:
     - name: Install tools
       run: |
         rustup component add clippy rustfmt
-        cargo install --locked cargo-expand
-        cargo install --locked cargo-bloat
+        cargo install --locked cargo-expand --version 1.0.95
+        cargo install --locked cargo-bloat --version 0.12.1
     - name: Build
       run: cargo build --verbose
     - name: Run tests
